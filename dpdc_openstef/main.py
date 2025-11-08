@@ -186,7 +186,7 @@ async def get_dashboard_data():
     return JSONResponse(dashboard_data)
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, port=8080)
+# if __name__ == "__main__":
+#     import uvicorn
+#     uvicorn.run(app, port=8080)
 
