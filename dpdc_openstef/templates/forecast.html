@@ -28,6 +28,15 @@
                         </select>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="model_name" class="form-label">Model <span class="text-danger">*</span></label>
+                        <select class="form-select" id="model_name" name="model_name" required>
+                            {% for m in available_models %}
+                                <option value="{{ m }}">{{ m }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="holiday" class="form-label">Holiday <span class="text-danger">*</span></label>
@@ -101,6 +110,7 @@
                         <thead>
                             <tr>
                                 <th>Model Name</th>
+                                <th>Timestamp</th>
                                 <th>Forecasted Value</th>
                             </tr>
                         </thead>
@@ -174,7 +184,12 @@ $(document).ready(function() {
         $btn.html('<span class="spinner-border spinner-border-sm me-2"></span>Fetching...');
 
         fetch(`/api/weather?date=${date}&hour=${hour}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 weatherData = data;
                 displayWeatherData(data);
@@ -212,12 +227,18 @@ $(document).ready(function() {
         formData.append('holiday_type', $('#holiday_type').val());
         formData.append('nation_event', $('#nation_event').val());
         formData.append('weather_data', JSON.stringify(weatherData));
-
+        formData.append('model_name', $('#model_name').val());
+        
         fetch('/api/forecast', {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             displayForecastResults(data);
             fetchAndDisplayChart($('#date').val(), $('#hour').val());
@@ -261,14 +282,16 @@ $(document).ready(function() {
 
     function displayForecastResults(data) {
         let tableHtml = '';
-        data.forEach(result => {
-            tableHtml += `
-                <tr>
-                    <td><strong>${result.model_name}</strong></td>
-                    <td>${result.forecasted_value.toFixed(2)}</td>
-                </tr>
-            `;
-        });
+        
+        // Handle the new response format with single object containing timestamp, forecast, custom_name
+        const timestamp = new Date(data.timestamp).toLocaleString();
+        tableHtml += `
+            <tr>
+                <td><strong>${data.custom_name}</strong></td>
+                <td>${timestamp}</td>
+                <td>${data.forecast.toFixed(2)}</td>
+            </tr>
+        `;
 
         $('#resultsTable').html(tableHtml);
         $('#resultsCard').slideDown();
@@ -276,7 +299,12 @@ $(document).ready(function() {
 
     function fetchAndDisplayChart(date, hour) {
         fetch(`/api/forecast-chart?date=${date}&hour=${hour}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 const traces = [
                     {

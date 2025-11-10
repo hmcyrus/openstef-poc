@@ -24,6 +24,27 @@
                             <option value="lgb">LightGBM (LGB)</option>
                         </select>
                     </div>
+                    <div class="mb-4">
+                        <label for="custom_name" class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="custom_name" required>
+                    </div>
+
+                    <!-- Training Data Date Range -->
+                    <div class="mb-4">
+                        <label class="form-label">Training Data Period <span class="text-danger">*</span></label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="training_data_start_date" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="training_data_start_date" name="training_data_start_date" required>
+                                <small class="text-muted">Start date for training data</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="training_data_end_date" class="form-label">End Date</label>
+                                <input type="date" class="form-control" id="training_data_end_date" name="training_data_end_date" required>
+                                <small class="text-muted">End date for training data</small>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Hyperparameters Section -->
                     <div id="hyperparamsSection" style="display: none;">
@@ -157,12 +178,24 @@ $(document).ready(function() {
         e.preventDefault();
         
         const model = $('#model').val();
+        const custom_name = $('#custom_name').val();
+        const training_data_start_date = $('#training_data_start_date').val();
+        const training_data_end_date = $('#training_data_end_date').val();
         
         if (!model) {
             showAlert('Please select a model', 'danger');
             return;
         }
         
+        if (!training_data_start_date || !training_data_end_date) {
+            showAlert('Please select both start and end dates for training data', 'danger');
+            return;
+        }
+        
+        if (new Date(training_data_start_date) >= new Date(training_data_end_date)) {
+            showAlert('Start date must be before end date', 'danger');
+            return;
+        }
         // Collect hyperparameters based on selected model
         let hyperparams = {};
         
@@ -191,6 +224,9 @@ $(document).ready(function() {
         // Prepare form data
         const formData = new FormData();
         formData.append('model', model);
+        formData.append('custom_name', custom_name);
+        formData.append('training_data_start_date', training_data_start_date);
+        formData.append('training_data_end_date', training_data_end_date);
         formData.append('hyperparams', JSON.stringify(hyperparams));
         
         // Submit to API
@@ -237,6 +273,7 @@ $(document).ready(function() {
 
     function displayTrainingStatus(data) {
         const modelName = data.model === 'xgb' ? 'XGBoost' : 'LightGBM';
+        const custom_name = data.custom_name
         
         let paramsHtml = '<ul class="list-unstyled mb-0">';
         for (const [key, value] of Object.entries(data.hyperparameters)) {
@@ -249,6 +286,10 @@ $(document).ready(function() {
                 <div class="col-md-6">
                     <h6 class="text-muted mb-2">Model</h6>
                     <p class="h5 mb-3">${modelName}</p>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-2">Custom Name</h6>
+                    <p class="h5 mb-3">${custom_name}</p>
                 </div>
                 <div class="col-md-6">
                     <h6 class="text-muted mb-2">Status</h6>

@@ -76,16 +76,40 @@ The application will be available at: http://localhost:8080
 
 ```
 dpdc_openstef/
-├── main.py                 # FastAPI application
-├── templates/              # Jinja2 templates
-│   ├── base.html          # Base template with navigation
-│   ├── train_model.html   # Train model page
-│   ├── forecast.html      # Forecast page
-│   ├── data_input.html    # Data input page
-│   └── dashboard.html     # Dashboard page
-├── static/                 # Static files (CSS, JS, images)
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
+├── main.py                    # FastAPI application entry point
+├── poc.py                     # Proof of concept script
+├── run.bat                    # Windows batch script to run the app
+├── run.sh                     # Unix shell script to run the app
+├── requirements.txt           # Python dependencies
+├── requirements.md            # Requirements documentation
+├── README.md                  # This file
+├── LOGGING_SETUP.md          # Logging configuration documentation
+├── windows_issue.md          # Windows-specific issues documentation
+├── routes/                   # API route handlers
+│   ├── __init__.py
+│   ├── dashboard.py          # Dashboard API endpoints
+│   ├── data_input.py         # Data input API endpoints
+│   ├── forecast.py           # Forecast API endpoints
+│   └── train_model.py        # Model training API endpoints
+├── services/                 # Business logic services
+│   ├── __init__.py
+│   └── model_service.py      # ML model service layer
+├── templates/                # Jinja2 HTML templates
+│   ├── base.html            # Base template with navigation
+│   ├── train_model.html     # Train model page
+│   ├── forecast.html        # Forecast page
+│   ├── data_input.html      # Data input page
+│   └── dashboard.html       # Dashboard page
+├── static/                   # Static files and data
+│   └── master_data_with_forecasted.csv  # Sample data file
+├── utils/                    # Utility modules
+│   ├── __init__.py
+│   └── logger.py            # Logging utilities
+├── logs/                     # Application logs
+│   └── app.log              # Main application log file
+└── trained_models/           # Stored ML models and artifacts
+    ├── after_refact_01/     # Model training run artifacts
+    └── test_101/            # Test model artifacts
 ```
 
 ## Notes

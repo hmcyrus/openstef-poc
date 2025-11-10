@@ -38,3 +38,7 @@ The requirements for the pages will be following
 
 # Dashboard page
 - This page will contain some graphs
+
+# Ideas for better performance
+- Due to erratic nature of weather pattern short term patterns demand significant attention. When prediction starts to worsen we should consider training another model with more recent data in training set.
+- We provided a Data Quality Indicator(DQI) section in the Dashboard. There we'll highlight useful metrics like missing data points of prediction and actual.
