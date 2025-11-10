@@ -10,7 +10,7 @@ from openstef.data_classes.prediction_job import PredictionJobDataClass
 from openstef.pipeline.train_model import train_model_pipeline
 from openstef.pipeline.create_forecast import create_forecast_pipeline
 from utils.dateutils import create_utc_datetime
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Get logger for this module (configuration is done in main.py)
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ class ModelService:
         
         # Return the required JSON structure
         result = {
-            "timestamp": forecast_timestamp.isoformat(),
+            "timestamp": create_utc_datetime(date, hour, timezone(timedelta(hours=6))).isoformat(),
             "forecast": float(forecast_value),
             "custom_name": custom_name
         }

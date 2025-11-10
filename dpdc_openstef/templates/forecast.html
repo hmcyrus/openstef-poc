@@ -111,7 +111,7 @@
                             <tr>
                                 <th>Model Name</th>
                                 <th>Timestamp</th>
-                                <th>Forecasted Value</th>
+                                <th>Forecasted Value(MW)</th>
                             </tr>
                         </thead>
                         <tbody id="resultsTable"></tbody>
@@ -126,7 +126,7 @@
                 <i class="bi bi-bar-chart-line"></i> 24-Hour Forecast Chart
             </div>
             <div class="card-body">
-                <div id="forecastChart"></div>
+                <div id="forecastChart" style="width: 100%; overflow: hidden;"></div>
             </div>
         </div>
     </div>
@@ -294,7 +294,13 @@ $(document).ready(function() {
         `;
 
         $('#resultsTable').html(tableHtml);
-        $('#resultsCard').slideDown();
+        $('#resultsCard').slideDown(400, function() {
+            // Scroll to the results card and focus on it after slide down animation completes
+            $('html, body').animate({
+                scrollTop: $('#resultsCard').offset().top - 20
+            }, 600);
+            $('#resultsCard').focus();
+        });
     }
 
     function fetchAndDisplayChart(date, hour) {
@@ -338,6 +344,7 @@ $(document).ready(function() {
 
                 const layout = {
                     title: '24-Hour Load Forecast',
+                    autosize: true,
                     xaxis: {
                         title: 'Hour of Day',
                         tickmode: 'linear',
