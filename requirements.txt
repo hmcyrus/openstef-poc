@@ -1,2 +1,9 @@
 openstef==3.4.72
 jupyter==1.0
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+jinja2==3.1.2
+python-multipart==0.0.6
+pandas
+xgboost
+openpyxl
