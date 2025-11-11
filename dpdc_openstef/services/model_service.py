@@ -173,6 +173,42 @@ class ModelService:
         
         logger.info(f"Returning forecast result: {result}")
         return result
+    
+    @staticmethod
+    async def forecast_from_mulitple_models(custom_names: List[str], date: str) -> List[Dict[str, Any]]:
+        """
+        Create forecasts from multiple trained models for 24 hours (0-23)
+        
+        Args:
+            custom_names: List of trained model names
+            date: Date string in format 'YYYY-MM-DD'
+            
+        Returns:
+            List of dicts, each containing model name and list of forecasts for 24 hours
+        """
+        results = []
+        
+        # Loop through each model sequentially
+        for custom_name in custom_names:
+            logger.info(f"Starting forecast for model: {custom_name}")
+            forecasts = []
+            
+            # Loop through all 24 hours (0-23)
+            for hour in range(24):
+                logger.debug(f"Forecasting for model {custom_name}, hour {hour}")
+                forecast_result = await ModelService.forecast_from_model(custom_name, date, hour)
+                forecasts.append(forecast_result)
+            
+            # Store the model name and its 24-hour forecasts
+            model_result = {
+                "model_name": custom_name,
+                "forecasts": forecasts
+            }
+            results.append(model_result)
+            logger.info(f"Completed forecast for model: {custom_name}")
+        
+        logger.info(f"Completed forecasts for all {len(custom_names)} models")
+        return results
 
 def calculate_previous_hr_of_forecast(date: str, hour: int) -> datetime:
     # Create UTC datetime from date and hour parameters
