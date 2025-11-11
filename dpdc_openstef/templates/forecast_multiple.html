@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}Forecast Multiple Models - DPDC OpenSTEF{% endblock %}
+
+{% block content %}
+<h1 class="page-title">
+    <i class="bi bi-graph-up-arrow"></i> Forecast Multiple Models
+</h1>
+
+<div class="row">
+    <!-- Form Section -->
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calendar-check"></i> Forecast Parameters
+            </div>
+            <div class="card-body">
+                <form id="forecastMultipleForm">
+                    <div class="mb-3">
+                        <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="date" name="date" placeholder="Select date" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="model_names" class="form-label">Models <span class="text-danger">*</span></label>
+                        <select class="form-select" id="model_names" name="model_names" multiple required>
+                            {% for m in available_models %}
+                                <option value="{{ m }}">{{ m }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select one or more models to compare forecasts</div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="holiday" class="form-label">Holiday <span class="text-danger">*</span></label>
+                            <select class="form-select" id="holiday" name="holiday" required>
+                                <option value="0" selected>0 (No)</option>
+                                <option value="1">1 (Yes)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="holiday_type" class="form-label">Holiday Type <span class="text-danger">*</span></label>
+                            <select class="form-select" id="holiday_type" name="holiday_type" required>
+                                <option value="0" selected>0</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="nation_event" class="form-label">Nation Event <span class="text-danger">*</span></label>
+                        <select class="form-select" id="nation_event" name="nation_event" required>
+                            <option value="0" selected>0</option>
+                        </select>
+                    </div>
+
+                    <!-- Alert Messages -->
+                    <div id="alertContainer"></div>
+
+                    <!-- Submit Button -->
+                    <div class="d-grid gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary" id="forecastBtn">
+                            <i class="bi bi-lightning-charge"></i> Generate Forecasts
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="col-lg-7">
+        <!-- Forecast Results Table -->
+        <div class="card" id="resultsCard" style="display: none;">
+            <div class="card-header">
+                <i class="bi bi-table"></i> Forecast Results
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered">
+                        <thead id="resultsTableHead"></thead>
+                        <tbody id="resultsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize date picker
+    flatpickr("#date", {
+        dateFormat: "Y-m-d",
+        defaultDate: new Date()
+    });
+
+    // Initialize multi-select with Select2
+    $('#model_names').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Select models...',
+        closeOnSelect: false
+    });
+
+    // Populate holiday_type select
+    const holidayTypeOptions = [];
+    for (let i = 0; i <= 20; i++) {
+        holidayTypeOptions.push(`<option value="${i}" ${i === 0 ? 'selected' : ''}>${i}</option>`);
+    }
+    $('#holiday_type').html(holidayTypeOptions.join(''));
+
+    // Populate nation_event select
+    const nationEventOptions = [];
+    for (let i = 0; i <= 5; i++) {
+        nationEventOptions.push(`<option value="${i}" ${i === 0 ? 'selected' : ''}>${i}</option>`);
+    }
+    $('#nation_event').html(nationEventOptions.join(''));
+
+    // Form submission
+    $('#forecastMultipleForm').on('submit', function(e) {
+        e.preventDefault();
+
+        const selectedModels = $('#model_names').val();
+        if (!selectedModels || selectedModels.length === 0) {
+            showAlert('Please select at least one model.', 'warning');
+            return;
+        }
+
+        const $forecastBtn = $('#forecastBtn');
+        $forecastBtn.prop('disabled', true);
+        $forecastBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Generating...');
+
+        const formData = new FormData();
+        formData.append('date', $('#date').val());
+        formData.append('holiday', $('#holiday').val());
+        formData.append('holiday_type', $('#holiday_type').val());
+        formData.append('nation_event', $('#nation_event').val());
+        formData.append('model_names', selectedModels.join(','));
+        
+        fetch('/api/forecast-multiple', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            displayForecastResults(data);
+            
+            $forecastBtn.prop('disabled', false);
+            $forecastBtn.html('<i class="bi bi-lightning-charge"></i> Generate Forecasts');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('Failed to generate forecasts.', 'danger');
+            
+            $forecastBtn.prop('disabled', false);
+            $forecastBtn.html('<i class="bi bi-lightning-charge"></i> Generate Forecasts');
+        });
+    });
+
+    function displayForecastResults(data) {
+        // data structure: {all_forecasts: [{custom_name: "model1", model_forecasts: [{timestamp, forecast}]}]}
+        const allForecasts = data.all_forecasts;
+        
+        if (!allForecasts || allForecasts.length === 0) {
+            showAlert('No forecast data returned.', 'warning');
+            return;
+        }
+
+        // Build table header with Hour column and one column per model
+        let headerHtml = '<tr><th>Hour</th>';
+        allForecasts.forEach(modelData => {
+            headerHtml += `<th>Forecast ${modelData.custom_name} (MW)</th>`;
+        });
+        headerHtml += '</tr>';
+        $('#resultsTableHead').html(headerHtml);
+
+        // Build table body - one row per hour (0-23)
+        let bodyHtml = '';
+        const numHours = allForecasts[0].model_forecasts.length;
+        
+        for (let hourIdx = 0; hourIdx < numHours; hourIdx++) {
+            bodyHtml += `<tr><td><strong>${hourIdx}</strong></td>`;
+            
+            // Add forecast value for each model
+            allForecasts.forEach(modelData => {
+                const forecastValue = modelData.model_forecasts[hourIdx].forecast;
+                bodyHtml += `<td>${forecastValue.toFixed(2)}</td>`;
+            });
+            
+            bodyHtml += '</tr>';
+        }
+
+        $('#resultsTableBody').html(bodyHtml);
+        $('#resultsCard').slideDown(400, function() {
+            // Scroll to the results card and focus on it after slide down animation completes
+            $('html, body').animate({
+                scrollTop: $('#resultsCard').offset().top - 20
+            }, 600);
+            $('#resultsCard').focus();
+        });
+    }
+
+    function showAlert(message, type) {
+        const alertHtml = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        $('#alertContainer').html(alertHtml);
+        
+        setTimeout(() => {
+            $('.alert').alert('close');
+        }, 5000);
+    }
+});
+</script>
+{% endblock %}
