@@ -146,6 +146,39 @@ All `print()` statements have been replaced with appropriate logger calls:
 4. **Use f-strings** - More readable than string concatenation
 5. **Log exceptions properly** - Use `logger.exception()` in except blocks
 
+## Third-Party Library Logging
+
+The logging system now captures output from third-party libraries like OpenSTEF, MLflow, scikit-learn, XGBoost, etc.
+
+### How It Works
+
+1. **Root Logger Configuration**: The root logger is configured with both console and file handlers
+2. **Third-Party Logger Setup**: Specific loggers for common libraries are explicitly configured
+3. **stdout/stderr Capture**: A context manager captures print statements and redirects them to logging
+
+### Capturing Training Outputs
+
+Training outputs from OpenSTEF are captured using the `capture_outputs` context manager:
+
+```python
+from utils.logger import capture_outputs
+
+logger.info("Starting model training pipeline...")
+
+with capture_outputs('openstef.training'):
+    train_data, validation_data, test_data = train_model_pipeline(
+        pj,
+        train_data,
+        check_old_model_age=False,
+        mlflow_tracking_uri=mlflow_tracking_uri,
+        artifact_folder=f"{PARENT_DIR}/{custom_name}/mlflow_artifacts",
+    )
+
+logger.info("Model training pipeline completed successfully")
+```
+
+This ensures all console outputs during training are logged to the file.
+
 ## Future Enhancements
 
 Consider adding:
