@@ -10,6 +10,7 @@ from openstef.data_classes.prediction_job import PredictionJobDataClass
 from openstef.pipeline.train_model import train_model_pipeline
 from openstef.pipeline.create_forecast import create_forecast_pipeline
 from utils.dateutils import create_utc_datetime
+from utils.logger import capture_outputs
 from datetime import datetime, timedelta, timezone
 
 # Get logger for this module (configuration is done in main.py)
@@ -103,13 +104,19 @@ class ModelService:
 
         mlflow_tracking_uri = f"{PARENT_DIR}/{custom_name}/mlflow_trained_models"
 
-        train_data, validation_data, test_data = train_model_pipeline(
-            pj,
-            train_data,
-            check_old_model_age=False,
-            mlflow_tracking_uri=mlflow_tracking_uri,
-            artifact_folder=f"{PARENT_DIR}/{custom_name}/mlflow_artifacts",
-        )
+        logger.info("Starting model training pipeline...")
+        
+        # Capture all stdout/stderr from the training pipeline
+        with capture_outputs('openstef.training'):
+            train_data, validation_data, test_data = train_model_pipeline(
+                pj,
+                train_data,
+                check_old_model_age=False,
+                mlflow_tracking_uri=mlflow_tracking_uri,
+                artifact_folder=f"{PARENT_DIR}/{custom_name}/mlflow_artifacts",
+            )
+        
+        logger.info("Model training pipeline completed successfully")
         return "hello"
     
     @staticmethod
@@ -151,12 +158,17 @@ class ModelService:
 
         mlflow_tracking_uri = f"{PARENT_DIR}/{custom_name}/mlflow_trained_models"
 
-        forecast = create_forecast_pipeline(
-            pj,
-            to_forecast_data,
-            mlflow_tracking_uri,
-        )
+        logger.info("Starting forecast pipeline...")
+        
+        # Capture all stdout/stderr from the forecast pipeline
+        with capture_outputs('openstef.forecast'):
+            forecast = create_forecast_pipeline(
+                pj,
+                to_forecast_data,
+                mlflow_tracking_uri,
+            )
 
+        logger.info(f"Forecast pipeline completed")
         logger.info(f"Forecast results:\n{forecast}")
 
         # Create the time index using the utility method
