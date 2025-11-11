@@ -175,7 +175,7 @@ class ModelService:
         return result
     
     @staticmethod
-    async def forecast_from_mulitple_models(custom_names: List[str], date: str) -> List[Dict[str, Any]]:
+    async def forecast_from_mulitple_models(custom_names: List[str], date: str) -> Dict[str, Any]:
         """
         Create forecasts from multiple trained models for 24 hours (0-23)
         
@@ -184,7 +184,7 @@ class ModelService:
             date: Date string in format 'YYYY-MM-DD'
             
         Returns:
-            List of dicts, each containing model name and list of forecasts for 24 hours
+            Dict with 'all_forecasts' key containing list of model forecasts
         """
         # Load input data and prepare dataframe with NaN for 24 hours
         input_data = pd.read_csv(TRAINING_DATA_PATH, index_col=0, parse_dates=True)
@@ -208,7 +208,7 @@ class ModelService:
         to_forecast_data = to_forecast_data[~to_forecast_data.index.duplicated(keep='first')]
         to_forecast_data = to_forecast_data[to_forecast_data.index.notna()]
         
-        results = []
+        all_forecasts = []
         
         # Loop through each model sequentially
         for custom_name in custom_names:
@@ -218,28 +218,27 @@ class ModelService:
             forecast_df = _forecast_24_hours(custom_name, to_forecast_data)
             
             # Format the forecasts for all 24 hours
-            forecasts = []
+            model_forecasts = []
             for hour in range(24):
                 forecast_timestamp = create_utc_datetime(date, hour)
                 forecast_value = forecast_df.loc[forecast_timestamp, 'forecast']
                 
                 forecast_result = {
                     "timestamp": create_utc_datetime(date, hour, timezone(timedelta(hours=6))).isoformat(),
-                    "forecast": float(forecast_value),
-                    "custom_name": custom_name
+                    "forecast": float(forecast_value)
                 }
-                forecasts.append(forecast_result)
+                model_forecasts.append(forecast_result)
             
             # Store the model name and its 24-hour forecasts
             model_result = {
-                "model_name": custom_name,
-                "forecasts": forecasts
+                "custom_name": custom_name,
+                "model_forecasts": model_forecasts
             }
-            results.append(model_result)
+            all_forecasts.append(model_result)
             logger.info(f"Completed forecast for model: {custom_name}")
         
         logger.info(f"Completed forecasts for all {len(custom_names)} models")
-        return results
+        return {"all_forecasts": all_forecasts}
 
 def _forecast_24_hours(custom_name: str, to_forecast_data: pd.DataFrame) -> pd.DataFrame:
     """
