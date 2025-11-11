@@ -173,6 +173,102 @@ class ModelService:
         
         logger.info(f"Returning forecast result: {result}")
         return result
+    
+    @staticmethod
+    async def forecast_from_mulitple_models(custom_names: List[str], date: str) -> Dict[str, Any]:
+        """
+        Create forecasts from multiple trained models for 24 hours (0-23)
+        
+        Args:
+            custom_names: List of trained model names
+            date: Date string in format 'YYYY-MM-DD'
+            
+        Returns:
+            Dict with 'all_forecasts' key containing list of model forecasts
+        """
+        # Load input data and prepare dataframe with NaN for 24 hours
+        input_data = pd.read_csv(TRAINING_DATA_PATH, index_col=0, parse_dates=True)
+        
+        # Calculate the start of the 24-hour forecast period (hour 0 of the given date)
+        forecast_start_datetime = create_utc_datetime(date, 0)
+        
+        # Get the index of the hour before the forecast period starts
+        traing_data_last_index = input_data.index.get_loc(calculate_previous_hr_of_forecast(date, 0))
+        
+        # Get the 24 hours we want to forecast (from hour 0 to hour 23 of the given date)
+        test_data = input_data.iloc[traing_data_last_index+1:traing_data_last_index+25]
+        logger.info(f"Test data starting hour: {test_data.head(1).index}")
+        logger.info(f"Test data ending hour: {test_data.tail(1).index}")
+        
+        # Prepare data to make the forecast - set load values to NaN for the 24 hours
+        to_forecast_data = input_data.copy(deep=True)
+        to_forecast_data.loc[test_data.index, 'load'] = np.nan
+        
+        # Remove duplicate index values and NaT
+        to_forecast_data = to_forecast_data[~to_forecast_data.index.duplicated(keep='first')]
+        to_forecast_data = to_forecast_data[to_forecast_data.index.notna()]
+        
+        all_forecasts = []
+        
+        # Loop through each model sequentially
+        for custom_name in custom_names:
+            logger.info(f"Starting forecast for model: {custom_name}")
+            
+            # Get 24-hour forecasts from this model
+            forecast_df = _forecast_24_hours(custom_name, to_forecast_data)
+            
+            # Format the forecasts for all 24 hours
+            model_forecasts = []
+            for hour in range(24):
+                forecast_timestamp = create_utc_datetime(date, hour)
+                forecast_value = forecast_df.loc[forecast_timestamp, 'forecast']
+                
+                forecast_result = {
+                    "timestamp": create_utc_datetime(date, hour, timezone(timedelta(hours=6))).isoformat(),
+                    "forecast": float(forecast_value)
+                }
+                model_forecasts.append(forecast_result)
+            
+            # Store the model name and its 24-hour forecasts
+            model_result = {
+                "custom_name": custom_name,
+                "model_forecasts": model_forecasts
+            }
+            all_forecasts.append(model_result)
+            logger.info(f"Completed forecast for model: {custom_name}")
+        
+        logger.info(f"Completed forecasts for all {len(custom_names)} models")
+        return {"all_forecasts": all_forecasts}
+
+def _forecast_24_hours(custom_name: str, to_forecast_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate 24-hour forecast for a given model using pre-prepared data with NaN values
+    
+    Args:
+        custom_name: Name of the trained model
+        to_forecast_data: DataFrame with NaN values for hours to be predicted
+        
+    Returns:
+        DataFrame containing forecast results for 24 hours
+    """
+    # Load the prediction job configuration
+    dictionary_path = f"./{PARENT_DIR}/{custom_name}/pj.pkl"
+    with open(dictionary_path, "rb") as file:
+        pj = pickle.load(file)
+    
+    # Set up MLflow tracking URI
+    mlflow_tracking_uri = f"{PARENT_DIR}/{custom_name}/mlflow_trained_models"
+    
+    # Create forecast pipeline
+    forecast = create_forecast_pipeline(
+        pj,
+        to_forecast_data,
+        mlflow_tracking_uri,
+    )
+    
+    logger.info(f"Forecast results for {custom_name}:\n{forecast}")
+    
+    return forecast
 
 def calculate_previous_hr_of_forecast(date: str, hour: int) -> datetime:
     # Create UTC datetime from date and hour parameters
