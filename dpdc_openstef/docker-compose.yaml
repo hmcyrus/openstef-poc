@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  fastapi-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dpdc_openstef_dev
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount source code for hot reload
+      - ./:/app
+      # Prevent __pycache__ and other Python artifacts from host
+      - /app/__pycache__
+      - /app/routes/__pycache__
+      - /app/services/__pycache__
+      - /app/utils/__pycache__
+      # Persist logs
+      - ./logs:/app/logs
+      # Persist trained models
+      - ./trained_models:/app/trained_models
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    # Override command for development (already set in Dockerfile but can be customized here)
+    command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload --log-level info
+    networks:
+      - dpdc_network
+
+networks:
+  dpdc_network:
+    driver: bridge

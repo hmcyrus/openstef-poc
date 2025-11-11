@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Logs (we'll mount these as volumes)
+logs/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yaml
+.dockerignore
+
+# Documentation
+*.md
+run.bat
+run.sh
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Trained models (we'll mount these as volumes)
+trained_models/
+
+# Test files
+tests/
+test_*.py
+*_test.py
