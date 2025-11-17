@@ -1,0 +1,16 @@
+{
+    "name": "Python 3.11 Dev Container",
+    "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  
+    "postCreateCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+  
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "ms-python.python",
+          "ms-python.vscode-pylance"
+        ]
+      }
+    }
+  }
+  
