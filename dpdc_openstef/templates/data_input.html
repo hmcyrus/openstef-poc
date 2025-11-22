@@ -17,7 +17,7 @@
                 <div class="row align-items-end mb-4">
                     <div class="col-md-6">
                         <label for="dateSelector" class="form-label">Date <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="dateSelector" placeholder="Select date">
+                        <input type="date" class="form-control" id="dateSelector" placeholder="Select date">
                     </div>
                     <div class="col-md-6">
                         <button type="button" class="btn btn-primary" id="loadDataBtn">
@@ -129,6 +129,14 @@ $(document).ready(function() {
             .then(data => {
                 hourlyData = data.data;
                 displayDataTable(data.data);
+                
+                // Set the common values for holiday fields from the first data point
+                if (data.data && data.data.length > 0) {
+                    $('#holiday').val(data.data[0].is_holiday);
+                    $('#holiday_type').val(data.data[0].holiday_type);
+                    $('#nation_event').val(data.data[0].national_event_type);
+                }
+                
                 $('#dropdownsSection').slideDown();
                 $('#dataTableSection').slideDown();
                 
@@ -146,17 +154,20 @@ $(document).ready(function() {
 
     // Update Button
     $('#updateBtn').on('click', function() {
-        // Collect current table data
+        // Collect current table data with the new structure
         const updatedData = [];
         $('#dataTableBody tr').each(function() {
-            const hour = parseInt($(this).find('.hour-cell').text());
-            const predicted = parseFloat($(this).find('.predicted-input').val()) || 0;
-            const actual = parseFloat($(this).find('.actual-input').val()) || 0;
+            const timestamp = $(this).data('timestamp');
+            const forecasted_load = parseFloat($(this).find('.predicted-input').val()) || 0;
+            const load = parseFloat($(this).find('.actual-input').val()) || 0;
             
             updatedData.push({
-                hour: hour,
-                predicted: predicted,
-                actual: actual
+                timestamp: timestamp,
+                load: load,
+                forecasted_load: forecasted_load,
+                is_holiday: parseInt($('#holiday').val()),
+                holiday_type: parseInt($('#holiday_type').val()),
+                national_event_type: parseInt($('#nation_event').val())
             });
         });
 
@@ -167,9 +178,6 @@ $(document).ready(function() {
         const formData = new FormData();
         formData.append('date', currentDate);
         formData.append('hourly_data', JSON.stringify(updatedData));
-        formData.append('holiday', $('#holiday').val());
-        formData.append('holiday_type', $('#holiday_type').val());
-        formData.append('nation_event', $('#nation_event').val());
 
         fetch('/api/data-input', {
             method: 'POST',
@@ -177,8 +185,12 @@ $(document).ready(function() {
         })
         .then(response => response.json())
         .then(data => {
-            showAlert('Data updated successfully!', 'success');
-            displayUpdateStatus(data);
+            if (data.status === 'success') {
+                showAlert('Data updated successfully!', 'success');
+                displayUpdateStatus(data);
+            } else {
+                showAlert('Failed to update data: ' + data.message, 'danger');
+            }
             
             $btn.prop('disabled', false);
             $btn.html('<i class="bi bi-check-circle"></i> Update');
@@ -195,25 +207,28 @@ $(document).ready(function() {
     function displayDataTable(data) {
         let tableHtml = '';
         
-        for (let i = 0; i < 24; i++) {
-            const hourData = data.find(d => d.hour === i) || { hour: i, predicted: 0, actual: 0 };
+        // Data is already sorted by timestamp, so we just iterate through it
+        for (let i = 0; i < data.length; i++) {
+            const hourData = data[i];
+            const timestamp = new Date(hourData.timestamp);
+            const hour = timestamp.getUTCHours();
             
             tableHtml += `
-                <tr>
+                <tr data-timestamp="${hourData.timestamp}">
                     <td class="hour-cell text-center align-middle">
-                        <strong>${i}</strong>
+                        <strong>${hour}</strong>
                     </td>
                     <td>
                         <input type="number" 
                                class="form-control predicted-input" 
-                               value="${hourData.predicted}" 
+                               value="${hourData.forecasted_load}" 
                                step="0.01"
                                placeholder="0.00">
                     </td>
                     <td>
                         <input type="number" 
                                class="form-control actual-input" 
-                               value="${hourData.actual}" 
+                               value="${hourData.load}" 
                                step="0.01"
                                placeholder="0.00">
                     </td>
@@ -232,12 +247,6 @@ $(document).ready(function() {
                     <p class="h5 mb-3">${currentDate}</p>
                 </div>
                 <div class="col-md-4">
-                    <h6 class="text-muted mb-2">Records Updated</h6>
-                    <p class="h5 mb-3">
-                        <span class="badge bg-success">${data.records_updated}</span>
-                    </p>
-                </div>
-                <div class="col-md-4">
                     <h6 class="text-muted mb-2">Status</h6>
                     <p class="h5 mb-3">
                         <span class="badge bg-success">Success</span>
@@ -245,18 +254,10 @@ $(document).ready(function() {
                 </div>
             </div>
             <hr>
-            <p class="mb-0 text-muted">
-                <i class="bi bi-info-circle"></i> ${data.message}
-            </p>
         `;
         
         $('#statusContent').html(statusHtml);
         $('#statusCard').slideDown();
-        
-        // Hide after 5 seconds
-        setTimeout(() => {
-            $('#statusCard').slideUp();
-        }, 5000);
     }
 
     function showAlert(message, type) {
