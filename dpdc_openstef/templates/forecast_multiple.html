@@ -178,7 +178,7 @@ $(document).ready(function() {
     flatpickr("#date", {
         dateFormat: "Y-m-d",
         minDate: "2023-01-01",
-        // maxDate: "2025-09-29"
+        maxDate: new Date()
     });
 
     // Initialize multi-select with Select2
@@ -351,6 +351,10 @@ $(document).ready(function() {
         
         // Create Plotly chart
         createForecastChart(allForecasts, actualLoads);
+        
+        // Hide real-time forecast divs before showing backtest results
+        $('#realtimeChartCard').hide();
+        $('#realtimeResultsCard').hide();
         
         // Show both chart and table
         $('#chartCard').slideDown(400);
@@ -624,6 +628,10 @@ $(document).ready(function() {
         
         // Create Plotly chart
         createRealtimeForecastChart(data);
+        
+        // Hide backtest divs before showing real-time forecast results
+        $('#chartCard').hide();
+        $('#resultsCard').hide();
         
         // Show both chart and table
         $('#realtimeChartCard').slideDown(400);
