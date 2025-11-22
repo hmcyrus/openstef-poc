@@ -3,13 +3,465 @@
 {% block title %}Dashboard - DPDC OpenSTEF{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="alert alert-warning text-center" role="alert">
-        <h2 class="alert-heading">🚧 Under Construction 🚧</h2>
+<div class="container mt-4">
+    <h2 class="mb-4">Dashboard</h2>
+
+    <!-- Data Viewer Block -->
+    <div class="card mb-5 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="fas fa-table me-2"></i>Data Viewer</h4>
+        </div>
+        <div class="card-body">
+            <form id="dataViewerForm" class="row g-3 align-items-end mb-4">
+                <div class="col-md-3">
+                    <label for="viewerStartDate" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="viewerStartDate" required max="">
+                </div>
+                <div class="col-md-3">
+                    <label for="viewerEndDate" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="viewerEndDate" required max="">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100" id="loadDataBtn">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Load Data
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i> Max range: 30 days. End date cannot be in future.
+                    </small>
+                </div>
+            </form>
+
+            <div id="viewerAlert" class="alert d-none" role="alert"></div>
+
+            <div id="dataViewerResults" class="d-none">
+                <div class="table-responsive mb-3">
+                    <table class="table table-striped table-hover table-bordered table-sm compact-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Load</th>
+                                <th>Forecasted Load</th>
+                                <th>Is Holiday</th>
+                                <th>Holiday Type</th>
+                                <th>National Event</th>
+                                <th>Temp (°C)</th>
+                                <th>Dewpoint (°C)</th>
+                                <th>Humidity (%)</th>
+                                <th>Precipitation</th>
+                                <th>Wind Dir</th>
+                                <th>Wind Speed</th>
+                                <th>Pressure</th>
+                                <th>Condition</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                            <!-- Rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <nav aria-label="Data pagination">
+                    <ul class="pagination justify-content-center" id="pagination">
+                        <!-- Pagination items will be inserted here -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Check Block -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0"><i class="fas fa-heartbeat me-2"></i>Data Health Check</h4>
+        </div>
+        <div class="card-body">
+            <form id="healthCheckForm" class="row g-3 align-items-end mb-4">
+                <div class="col-md-3">
+                    <label for="healthStartDate" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="healthStartDate" required max="">
+                </div>
+                <div class="col-md-3">
+                    <label for="healthEndDate" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="healthEndDate" required max="">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100" id="checkHealthBtn">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Check Health
+                    </button>
+                </div>
+            </form>
+
+            <div id="healthAlert" class="alert d-none" role="alert"></div>
+
+            <div id="healthReport" class="d-none">
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card border-danger">
+                            <div class="card-body d-flex align-items-center justify-content-between">
+                                <h5 class="card-title mb-0 text-danger">Missing/Unhealthy Data Points</h5>
+                                <span id="missingCount" class="badge bg-danger rounded-pill fs-5">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Missing Records
+                                    <span id="missingRecordsCount" class="badge bg-dark float-end">0</span>
+                                </h6>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="missingRecordsList" class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                                    <!-- Missing records will be inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <div class="card border-danger">
+                            <div class="card-header bg-danger text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-times-circle me-2"></i>Zero/Null Values
+                                    <span id="zeroNullCount" class="badge bg-dark float-end">0</span>
+                                </h6>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="zeroNullList" class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                                    <!-- Zero/Null items will be inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="healthSuccess" class="alert alert-success d-none text-center">
+                <i class="fas fa-check-circle fa-2x mb-2"></i><br>
+                <strong>All data points in this range are healthy!</strong>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-{% endblock %}
+<style>
+    .compact-table {
+        font-size: 0.85rem;
+    }
+    
+    .compact-table th,
+    .compact-table td {
+        padding: 0.25rem 0.5rem !important;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    
+    .compact-table thead th {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+</style>
+<script>
+    // Set max date to today for all date inputs
+    document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('viewerStartDate').setAttribute('max', today);
+        document.getElementById('viewerEndDate').setAttribute('max', today);
+        document.getElementById('healthStartDate').setAttribute('max', today);
+        document.getElementById('healthEndDate').setAttribute('max', today);
+    });
 
+    // --- Data Viewer Logic ---
+    let currentData = [];
+    const ITEMS_PER_PAGE = 24;
+    let currentPage = 1;
+
+    document.getElementById('dataViewerForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const start = document.getElementById('viewerStartDate').value;
+        const end = document.getElementById('viewerEndDate').value;
+        const btn = document.getElementById('loadDataBtn');
+        const alertBox = document.getElementById('viewerAlert');
+        const resultsDiv = document.getElementById('dataViewerResults');
+        
+        // Basic Client-side Validation
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        
+        alertBox.classList.add('d-none');
+        resultsDiv.classList.add('d-none');
+        
+        if (endDate > today) {
+            showAlert(alertBox, 'End date cannot be in the future.', 'danger');
+            return;
+        }
+        
+        if (endDate < startDate) {
+            showAlert(alertBox, 'End date cannot be before start date.', 'danger');
+            return;
+        }
+        
+        const diffTime = Math.abs(endDate - startDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        if (diffDays > 30) {
+            showAlert(alertBox, 'Date range cannot exceed 30 days.', 'danger');
+            return;
+        }
+
+        setLoading(btn, true);
+
+        try {
+            const response = await fetch(`/api/dashboard/data?start_date=${start}&end_date=${end}`);
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.detail || 'Failed to load data');
+            }
+            
+            currentData = result.data;
+            if (currentData.length === 0) {
+                showAlert(alertBox, 'No data found for the selected range.', 'warning');
+            } else {
+                currentPage = 1;
+                renderTable(currentPage);
+                renderPagination();
+                resultsDiv.classList.remove('d-none');
+            }
+        } catch (error) {
+            showAlert(alertBox, error.message, 'danger');
+        } finally {
+            setLoading(btn, false);
+        }
+    });
+
+    function renderTable(page) {
+        const tbody = document.getElementById('dataTableBody');
+        tbody.innerHTML = '';
+        
+        const startIdx = (page - 1) * ITEMS_PER_PAGE;
+        const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, currentData.length);
+        const pageData = currentData.slice(startIdx, endIdx);
+        
+        pageData.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${row.date_time}</td>
+                <td>${row.load !== null ? row.load : 'N/A'}</td>
+                <td>${row.forecasted_load !== null ? row.forecasted_load : 'N/A'}</td>
+                <td>${row.is_holiday !== null ? row.is_holiday : 'N/A'}</td>
+                <td>${row.holiday_type !== null ? row.holiday_type : 'N/A'}</td>
+                <td>${row.national_event_type !== null ? row.national_event_type : 'N/A'}</td>
+                <td>${row.temp !== null ? row.temp : 'N/A'}</td>
+                <td>${row.dwpt !== null ? row.dwpt : 'N/A'}</td>
+                <td>${row.rhum !== null ? row.rhum : 'N/A'}</td>
+                <td>${row.prcp !== null ? row.prcp : 'N/A'}</td>
+                <td>${row.wdir !== null ? row.wdir : 'N/A'}</td>
+                <td>${row.wspd !== null ? row.wspd : 'N/A'}</td>
+                <td>${row.pres !== null ? row.pres : 'N/A'}</td>
+                <td>${row.coco !== null ? row.coco : 'N/A'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderPagination() {
+        const pagination = document.getElementById('pagination');
+        pagination.innerHTML = '';
+        
+        const totalPages = Math.ceil(currentData.length / ITEMS_PER_PAGE);
+        if (totalPages <= 1) return;
+
+        // Previous
+        const prevLi = document.createElement('li');
+        prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+        prevLi.innerHTML = `<a class="page-link" href="#">Previous</a>`;
+        prevLi.onclick = (e) => {
+            e.preventDefault();
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable(currentPage);
+                renderPagination();
+            }
+        };
+        pagination.appendChild(prevLi);
+
+        // Page Numbers (Simplified: show all if few, or window around current)
+        // For simplicity showing all pages or limited window
+        let startPage = Math.max(1, currentPage - 2);
+        let endPage = Math.min(totalPages, currentPage + 2);
+        
+        if (startPage > 1) {
+             pagination.appendChild(createPageItem(1));
+             if(startPage > 2) pagination.appendChild(createEllipsis());
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            pagination.appendChild(createPageItem(i));
+        }
+
+        if (endPage < totalPages) {
+            if(endPage < totalPages - 1) pagination.appendChild(createEllipsis());
+            pagination.appendChild(createPageItem(totalPages));
+        }
+
+        // Next
+        const nextLi = document.createElement('li');
+        nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+        nextLi.innerHTML = `<a class="page-link" href="#">Next</a>`;
+        nextLi.onclick = (e) => {
+            e.preventDefault();
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderTable(currentPage);
+                renderPagination();
+            }
+        };
+        pagination.appendChild(nextLi);
+    }
+
+    function createPageItem(pageNum) {
+        const li = document.createElement('li');
+        li.className = `page-item ${currentPage === pageNum ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#">${pageNum}</a>`;
+        li.onclick = (e) => {
+            e.preventDefault();
+            currentPage = pageNum;
+            renderTable(currentPage);
+            renderPagination();
+        };
+        return li;
+    }
+
+    function createEllipsis() {
+         const li = document.createElement('li');
+         li.className = 'page-item disabled';
+         li.innerHTML = '<span class="page-link">...</span>';
+         return li;
+    }
+
+    // --- Health Check Logic ---
+    document.getElementById('healthCheckForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const start = document.getElementById('healthStartDate').value;
+        const end = document.getElementById('healthEndDate').value;
+        const btn = document.getElementById('checkHealthBtn');
+        const alertBox = document.getElementById('healthAlert');
+        const reportDiv = document.getElementById('healthReport');
+        const successDiv = document.getElementById('healthSuccess');
+        const missingRecordsList = document.getElementById('missingRecordsList');
+        const zeroNullList = document.getElementById('zeroNullList');
+        const missingCountSpan = document.getElementById('missingCount');
+        const missingRecordsCountSpan = document.getElementById('missingRecordsCount');
+        const zeroNullCountSpan = document.getElementById('zeroNullCount');
+
+        alertBox.classList.add('d-none');
+        reportDiv.classList.add('d-none');
+        successDiv.classList.add('d-none');
+        
+        // Basic Validation
+        if (new Date(end) < new Date(start)) {
+            showAlert(alertBox, 'End date cannot be before start date.', 'danger');
+            return;
+        }
+
+        setLoading(btn, true);
+
+        try {
+            const response = await fetch(`/api/dashboard/health?start_date=${start}&end_date=${end}`);
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.detail || 'Failed to check health');
+            }
+            
+            if (result.missing_count === 0) {
+                successDiv.classList.remove('d-none');
+            } else {
+                // Separate missing points into two groups
+                const missingRecords = [];
+                const zeroNullRecords = [];
+                
+                result.missing_points.forEach(item => {
+                    if (item.reason === 'Missing record') {
+                        missingRecords.push(item);
+                    } else {
+                        zeroNullRecords.push(item);
+                    }
+                });
+                
+                // Update counts
+                missingCountSpan.textContent = result.missing_count;
+                missingRecordsCountSpan.textContent = missingRecords.length;
+                zeroNullCountSpan.textContent = zeroNullRecords.length;
+                
+                // Populate missing records list
+                missingRecordsList.innerHTML = '';
+                if (missingRecords.length === 0) {
+                    missingRecordsList.innerHTML = '<div class="list-group-item text-muted text-center">No missing records</div>';
+                } else {
+                    missingRecords.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'list-group-item';
+                        div.innerHTML = `<small>${item.timestamp}</small>`;
+                        missingRecordsList.appendChild(div);
+                    });
+                }
+                
+                // Populate zero/null list
+                zeroNullList.innerHTML = '';
+                if (zeroNullRecords.length === 0) {
+                    zeroNullList.innerHTML = '<div class="list-group-item text-muted text-center">No zero/null values</div>';
+                } else {
+                    zeroNullRecords.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'list-group-item d-flex justify-content-between align-items-start';
+                        div.innerHTML = `
+                            <small class="flex-grow-1">${item.timestamp}</small>
+                            <span class="badge bg-danger text-white ms-2" style="font-size: 0.7rem;">${item.reason}</span>
+                        `;
+                        zeroNullList.appendChild(div);
+                    });
+                }
+                
+                reportDiv.classList.remove('d-none');
+            }
+            
+        } catch (error) {
+            showAlert(alertBox, error.message, 'danger');
+        } finally {
+            setLoading(btn, false);
+        }
+    });
+
+    // Utilities
+    function showAlert(element, message, type) {
+        element.className = `alert alert-${type}`;
+        element.textContent = message;
+        element.classList.remove('d-none');
+    }
+
+    function setLoading(btn, isLoading) {
+        const spinner = btn.querySelector('.spinner-border');
+        if (isLoading) {
+            btn.disabled = true;
+            spinner.classList.remove('d-none');
+        } else {
+            btn.disabled = false;
+            spinner.classList.add('d-none');
+        }
+    }
+</script>
+{% endblock %}
