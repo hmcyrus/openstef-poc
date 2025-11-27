@@ -28,8 +28,8 @@
                 <form id="forecastMultipleForm">
                     <!-- Date -->
                     <div class="mb-3">
-                        <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="date" name="date" placeholder="Select date" required>
+                        <label for="date" class="form-label">Date</label>
+                        <input type="text" class="form-control" id="date" name="date" placeholder="Current date" required readonly>
                     </div>
 
                     <!-- Models -->
@@ -137,12 +137,9 @@
 let weatherDataFetched = false;
 
 $(document).ready(function() {
-    // Initialize date picker
-    flatpickr("#date", {
-        dateFormat: "Y-m-d",
-        minDate: "2023-01-01",
-        maxDate: new Date()
-    });
+    // Set current Dhaka date (read-only field)
+    const dhakaToday = getDhakaCurrentDate();
+    $('#date').val(dhakaToday);
 
     // Initialize multi-select with Select2
     $('#model_names').select2({
@@ -510,6 +507,16 @@ $(document).ready(function() {
         window.addEventListener('resize', function() {
             Plotly.Plots.resize('realtimeForecastChart');
         });
+    }
+
+    function getDhakaCurrentDate() {
+        const now = new Date();
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Dhaka',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(now);
     }
 });
 </script>
