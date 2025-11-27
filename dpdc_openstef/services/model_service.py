@@ -5,6 +5,7 @@ import pickle
 import os
 import json
 import logging
+import shutil
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from openstef.data_classes.prediction_job import PredictionJobDataClass
@@ -197,6 +198,16 @@ class ModelService:
             logger.info(f"Directory structure '{path_to_create}' created successfully.")
         except OSError as e:
             logger.error(f"Error creating directory structure: {e}")
+            raise
+        
+        # Persist the training dataset file used for training alongside the model artifacts
+        training_data_path = f"./{PARENT_DIR}/{custom_name}/training_data.csv"
+        try:
+            # Copy the physical CSV file instead of re-saving the DataFrame
+            shutil.copy(TRAINING_DATA_PATH, training_data_path)
+            logger.info(f"Training data file copied to {training_data_path}")
+        except Exception as e:
+            logger.error(f"Failed to save training data snapshot: {e}")
             raise
         
         # Store PredictionJob for later use
