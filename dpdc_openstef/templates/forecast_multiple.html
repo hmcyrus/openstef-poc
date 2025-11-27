@@ -126,6 +126,11 @@
                         <tbody id="realtimeResultsTableBody"></tbody>
                     </table>
                 </div>
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="button" class="btn btn-outline-primary" id="downloadRealtimeForecastBtn">
+                        <i class="bi bi-download"></i> Download Forecast
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -517,6 +522,49 @@ $(document).ready(function() {
             month: '2-digit',
             day: '2-digit'
         }).format(now);
+    }
+
+    // Download the currently visible real-time forecast table as an Excel file
+    $('#downloadRealtimeForecastBtn').on('click', function() {
+        const $resultsCard = $('#realtimeResultsCard');
+        const $table = $resultsCard.find('table');
+
+        if ($resultsCard.is(':hidden') || $table.length === 0 || $table.find('tbody tr').length === 0) {
+            showAlert('No forecast data to download. Please generate forecasts first.', 'warning');
+            return;
+        }
+
+        const tableElement = $table.get(0);
+        const selectedDate = $('#date').val() || getDhakaCurrentDate();
+        const filename = `Realtime_Forecast_${selectedDate}.xls`;
+
+        downloadTableAsExcel(tableElement, filename);
+    });
+
+    // Utility to export a table element to an Excel-compatible .xls file
+    function downloadTableAsExcel(tableElement, filename) {
+        const htmlContent = `
+            <html>
+                <head>
+                    <meta charset="UTF-8" />
+                </head>
+                <body>
+                    ${tableElement.outerHTML}
+                </body>
+            </html>`;
+
+        const blob = new Blob(['\ufeff', htmlContent], {
+            type: 'application/vnd.ms-excel'
+        });
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 });
 </script>

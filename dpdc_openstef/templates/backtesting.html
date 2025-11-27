@@ -79,6 +79,11 @@
                         <tbody id="resultsTableBody"></tbody>
                     </table>
                 </div>
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="button" class="btn btn-outline-primary" id="downloadBacktestForecastBtn">
+                        <i class="bi bi-download"></i> Download Forecast
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -357,6 +362,49 @@ $(document).ready(function() {
         setTimeout(() => {
             $('.alert').alert('close');
         }, 5000);
+    }
+
+    // Download the currently visible backtesting forecast table as an Excel file
+    $('#downloadBacktestForecastBtn').on('click', function() {
+        const $resultsCard = $('#resultsCard');
+        const $table = $resultsCard.find('table');
+
+        if ($resultsCard.is(':hidden') || $table.length === 0 || $table.find('tbody tr').length === 0) {
+            showAlert('No forecast data to download. Please run a backtest first.', 'warning');
+            return;
+        }
+
+        const tableElement = $table.get(0);
+        const selectedDate = $('#date').val() || 'backtest';
+        const filename = `Backtest_Forecast_${selectedDate}.xls`;
+
+        downloadTableAsExcel(tableElement, filename);
+    });
+
+    // Utility to export a table element to an Excel-compatible .xls file
+    function downloadTableAsExcel(tableElement, filename) {
+        const htmlContent = `
+            <html>
+                <head>
+                    <meta charset="UTF-8" />
+                </head>
+                <body>
+                    ${tableElement.outerHTML}
+                </body>
+            </html>`;
+
+        const blob = new Blob(['\ufeff', htmlContent], {
+            type: 'application/vnd.ms-excel'
+        });
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 });
 </script>
