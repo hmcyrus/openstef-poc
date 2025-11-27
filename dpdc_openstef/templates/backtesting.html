@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Backtest Multiple Models - DPDC OpenSTEF{% endblock %}
+
+{% block extra_css %}
+<style>
+    #resultsCard .table td,
+    #resultsCard .table th {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">
+    <i class="bi bi-arrow-counterclockwise"></i> Backtest Multiple Models
+</h1>
+
+<div class="row justify-content-center">
+    <div class="col-xl-6 col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calendar-check"></i> Date and Model Selection
+            </div>
+            <div class="card-body">
+                <form id="backtestingForm">
+                    <div class="mb-3">
+                        <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="date" name="date" placeholder="Select date" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="model_names" class="form-label">Models <span class="text-danger">*</span></label>
+                        <select class="form-select" id="model_names" name="model_names" multiple required>
+                            {% for m in available_models %}
+                                <option value="{{ m }}">{{ m }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select one or more models</div>
+                    </div>
+
+                    <div id="alertContainer"></div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary" id="backtestBtn">
+                            <i class="bi bi-lightning-charge"></i> Backtest Models
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-lg-12">
+        <div class="card" id="chartCard" style="display: none;">
+            <div class="card-header">
+                <i class="bi bi-bar-chart-line"></i> <span id="chartTitle">Forecast Comparison Chart</span>
+            </div>
+            <div class="card-body">
+                <div id="forecastChart" style="width: 100%; height: 100%;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-lg-12">
+        <div class="card" id="resultsCard" style="display: none;">
+            <div class="card-header">
+                <i class="bi bi-table"></i> Forecast Results
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered">
+                        <thead id="resultsTableHead"></thead>
+                        <tbody id="resultsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    flatpickr("#date", {
+        dateFormat: "Y-m-d",
+        minDate: "2023-01-01",
+        maxDate: new Date()
+    });
+
+    $('#model_names').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Select models...',
+        closeOnSelect: false,
+        width: '100%'
+    });
+
+    $('#backtestingForm').on('submit', function(e) {
+        e.preventDefault();
+
+        const date = $('#date').val();
+        if (!date) {
+            showAlert('Please select a date before generating forecasts.', 'warning');
+            return;
+        }
+
+        const selectedModels = $('#model_names').val();
+        if (!selectedModels || selectedModels.length === 0) {
+            showAlert('Please select at least one model.', 'warning');
+            return;
+        }
+
+        const $backtestBtn = $('#backtestBtn');
+        $backtestBtn.prop('disabled', true);
+        $backtestBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Generating...');
+
+        const formData = new FormData();
+        formData.append('date', date);
+        formData.append('model_names', selectedModels.join(','));
+
+        fetch('/api/forecast-multiple', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            displayForecastResults(data);
+
+            $backtestBtn.prop('disabled', false);
+            $backtestBtn.html('<i class="bi bi-lightning-charge"></i> Backtest Models');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('Failed to generate forecasts.', 'danger');
+
+            $backtestBtn.prop('disabled', false);
+            $backtestBtn.html('<i class="bi bi-lightning-charge"></i> Backtest Models');
+        });
+    });
+
+    function displayForecastResults(data) {
+        const allForecasts = data.all_forecasts;
+        const actualLoads = data.actual_loads || [];
+
+        if (!allForecasts || allForecasts.length === 0) {
+            showAlert('No forecast data returned.', 'warning');
+            return;
+        }
+
+        const selectedDate = $('#date').val();
+        $('#chartTitle').text(`Load Forecast for ${selectedDate}`);
+
+        const hasActualLoads = actualLoads.length > 0 && actualLoads.some(a => a.load !== null);
+
+        let headerHtml = '<tr>';
+        headerHtml += '<th class="text-center border">Hour</th>';
+        if (hasActualLoads) {
+            headerHtml += '<th class="text-center border">Actual Load (MW)</th>';
+        }
+
+        allForecasts.forEach(modelData => {
+            headerHtml += `<th colspan="2" class="text-center border">${modelData.custom_name}</th>`;
+        });
+        headerHtml += '</tr>';
+
+        $('#resultsTableHead').html(headerHtml);
+
+        let bodyHtml = '';
+        const numHours = allForecasts[0]?.model_forecasts?.length || 24;
+
+        for (let hourIdx = 0; hourIdx < numHours; hourIdx++) {
+            bodyHtml += `<tr><td class="text-center"><strong>${hourIdx}</strong></td>`;
+
+            let actualLoad = null;
+            if (hasActualLoads) {
+                actualLoad = actualLoads[hourIdx]?.load;
+                bodyHtml += `<td class="text-center">${actualLoad !== null && actualLoad !== undefined ? actualLoad.toFixed(2) : 'N/A'}</td>`;
+            }
+
+            allForecasts.forEach(modelData => {
+                const forecastData = modelData.model_forecasts?.[hourIdx];
+                const forecastValue = forecastData?.forecast;
+
+                if (forecastValue !== null && forecastValue !== undefined) {
+                    bodyHtml += `<td class="text-center">${forecastValue.toFixed(2)}</td>`;
+                } else {
+                    bodyHtml += `<td class="text-center text-muted">N/A</td>`;
+                }
+
+                if (hasActualLoads && actualLoad !== null && actualLoad !== undefined && actualLoad !== 0
+                    && forecastValue !== null && forecastValue !== undefined) {
+                    const deviation = ((forecastValue - actualLoad) / actualLoad) * 100;
+                    const sign = deviation >= 0 ? '+' : '';
+                    bodyHtml += `<td class="text-center">${sign}${deviation.toFixed(2)}%</td>`;
+                } else {
+                    bodyHtml += `<td class="text-center text-muted">N/A</td>`;
+                }
+            });
+
+            bodyHtml += '</tr>';
+        }
+
+        $('#resultsTableBody').html(bodyHtml);
+
+        createForecastChart(allForecasts, actualLoads);
+
+        $('#chartCard').slideDown(400);
+        $('#resultsCard').slideDown(400, function() {
+            $('html, body').animate({
+                scrollTop: $('#chartCard').offset().top - 20
+            }, 600);
+            $('#chartCard').focus();
+        });
+    }
+
+    function createForecastChart(allForecasts, actualLoads) {
+        const hours = Array.from({length: 24}, (_, i) => i);
+        const traces = [];
+
+        if (actualLoads.length > 0 && actualLoads.some(a => a.load !== null)) {
+            const actualLoadValues = actualLoads.map(a => a.load);
+            traces.push({
+                x: hours,
+                y: actualLoadValues,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Actual Load',
+                line: {
+                    color: 'rgb(0, 0, 0)',
+                    width: 3,
+                    dash: 'solid'
+                },
+                marker: {
+                    size: 8,
+                    color: 'rgb(0, 0, 0)'
+                }
+            });
+        }
+
+        const colors = [
+            'rgb(31, 119, 180)',
+            'rgb(255, 127, 14)',
+            'rgb(44, 160, 44)',
+            'rgb(214, 39, 40)',
+            'rgb(148, 103, 189)',
+            'rgb(140, 86, 75)',
+            'rgb(227, 119, 194)',
+            'rgb(127, 127, 127)',
+            'rgb(188, 189, 34)',
+            'rgb(23, 190, 207)'
+        ];
+
+        allForecasts.forEach((modelData, idx) => {
+            const forecastValues = modelData.model_forecasts?.map(f => f?.forecast ?? null) || [];
+            const color = colors[idx % colors.length];
+
+            traces.push({
+                x: hours,
+                y: forecastValues,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: `${modelData.custom_name}`,
+                line: {
+                    color: color,
+                    width: 2
+                },
+                marker: {
+                    size: 6
+                }
+            });
+        });
+
+        const layout = {
+            autosize: true,
+            title: {
+                text: 'Load Forecast Comparison',
+                font: {
+                    size: 18,
+                    family: 'Arial, sans-serif'
+                }
+            },
+            xaxis: {
+                title: 'Hour of Day',
+                tickmode: 'linear',
+                tick0: 0,
+                dtick: 2,
+                gridcolor: 'rgba(0, 0, 0, 0.1)'
+            },
+            yaxis: {
+                title: 'Load (MW)',
+                gridcolor: 'rgba(0, 0, 0, 0.1)'
+            },
+            hovermode: 'x unified',
+            legend: {
+                orientation: 'h',
+                x: 0.5,
+                y: -0.2,
+                xanchor: 'center',
+                yanchor: 'top',
+                bgcolor: 'rgba(255, 255, 255, 0.9)',
+                bordercolor: 'rgba(0, 0, 0, 0.1)',
+                borderwidth: 1
+            },
+            plot_bgcolor: 'rgba(0, 0, 0, 0)',
+            paper_bgcolor: 'white',
+            margin: {
+                l: 60,
+                r: 40,
+                t: 60,
+                b: 100
+            },
+            font: {
+                family: 'Arial, sans-serif',
+                size: 12
+            }
+        };
+
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+        };
+
+        Plotly.newPlot('forecastChart', traces, layout, config).then(function() {
+            Plotly.relayout('forecastChart', {
+                'xaxis.autorange': true,
+                'yaxis.autorange': true
+            });
+        });
+
+        window.addEventListener('resize', function() {
+            Plotly.Plots.resize('forecastChart');
+        });
+    }
+
+    function showAlert(message, type) {
+        const alertHtml = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        $('#alertContainer').html(alertHtml);
+
+        setTimeout(() => {
+            $('.alert').alert('close');
+        }, 5000);
+    }
+});
+</script>
+{% endblock %}
+

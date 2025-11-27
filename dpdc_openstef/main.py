@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 import logging
 
 # Import routers
-from routes import train_model, forecast_multiple, data_input, dashboard
+from routes import train_model, forecast_multiple, data_input, dashboard, backtesting
 # from routes import forecast  # Disabled
 from utils.logger import setup_logging
 
@@ -34,6 +34,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(train_model.router, tags=["Train Model"])
 # app.include_router(forecast.router, tags=["Forecast"])  # Disabled
 app.include_router(forecast_multiple.router, tags=["Forecast Multiple"])
+app.include_router(backtesting.router, tags=["Backtesting"])
 app.include_router(data_input.router, tags=["Data Input"])
 app.include_router(dashboard.router, tags=["Dashboard"])
 
