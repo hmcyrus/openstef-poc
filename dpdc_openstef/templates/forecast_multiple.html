@@ -277,13 +277,22 @@ $(document).ready(function() {
 
     function displayRealtimeForecastResults(data) {
         // data structure: {
-        //   current_hour: 11,
+        //   current_hour: 13,
+        //   current_date: "2025-01-18",
+        //   forecast_start: {date: "2025-01-18", hour: 14},
+        //   forecast_end: {date: "2025-01-19", hour: 13},
         //   historical_actual: [{hour, load}],
         //   historical_forecasted: [{hour, load}],
-        //   model_forecasts: [{custom_name, forecasts: [{hour, forecast}]}]
+        //   model_forecasts: [{custom_name, forecasts: [{date, hour, forecast}]}]
         // }
         
+        // Store forecast data for download filename
+        lastForecastData = data;
+        
         const currentHour = data.current_hour;
+        const currentDate = data.current_date;
+        const forecastStart = data.forecast_start;
+        const forecastEnd = data.forecast_end;
         const historicalActual = data.historical_actual || [];
         const historicalForecasted = data.historical_forecasted || [];
         const modelForecasts = data.model_forecasts || [];
@@ -293,12 +302,20 @@ $(document).ready(function() {
             return;
         }
 
-        // Update chart title with selected date and current hour
-        const selectedDate = $('#date').val();
-        $('#realtimeChartTitle').text(`Real-Time Forecast for ${selectedDate} (Current Hour: ${currentHour})`);
+        // Format date for display (e.g., "Jan 18")
+        function formatDateShort(dateStr) {
+            const date = new Date(dateStr + 'T00:00:00');
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
 
-        // Build table header - only show forecasted hours (current hour to 23)
+        // Update chart title with forecast range
+        const startLabel = `${formatDateShort(forecastStart.date)} ${forecastStart.hour}:00`;
+        const endLabel = `${formatDateShort(forecastEnd.date)} ${forecastEnd.hour}:00`;
+        $('#realtimeChartTitle').text(`24-Hour Forecast: ${startLabel} → ${endLabel}`);
+
+        // Build table header - Date, Hour, and model columns
         let headerHtml = '<tr>';
+        headerHtml += '<th class="text-center border">Date</th>';
         headerHtml += '<th class="text-center border">Hour</th>';
         
         // Add model headers
@@ -309,14 +326,24 @@ $(document).ready(function() {
         
         $('#realtimeResultsTableHead').html(headerHtml);
 
-        // Build table body - only show forecasted hours (current hour to 23)
+        // Build table body - iterate through all 24 forecast slots
         let bodyHtml = '';
-        for (let hour = currentHour; hour <= 23; hour++) {
-            bodyHtml += `<tr><td class="text-center"><strong>${hour}</strong></td>`;
+        
+        // Use the first model's forecasts as reference for the slots
+        const forecastSlots = modelForecasts[0]?.forecasts || [];
+        
+        forecastSlots.forEach((slot, index) => {
+            const slotDate = slot.date;
+            const slotHour = slot.hour;
+            const formattedDate = formatDateShort(slotDate);
+            
+            bodyHtml += `<tr>`;
+            bodyHtml += `<td class="text-center">${formattedDate}</td>`;
+            bodyHtml += `<td class="text-center"><strong>${slotHour}</strong></td>`;
             
             // Add forecast value for each model
             modelForecasts.forEach(modelData => {
-                const forecastData = modelData.forecasts?.find(f => f.hour === hour);
+                const forecastData = modelData.forecasts?.[index];
                 const forecastValue = forecastData?.forecast;
                 
                 if (forecastValue !== null && forecastValue !== undefined) {
@@ -327,7 +354,7 @@ $(document).ready(function() {
             });
             
             bodyHtml += '</tr>';
-        }
+        });
 
         $('#realtimeResultsTableBody').html(bodyHtml);
         
@@ -347,18 +374,33 @@ $(document).ready(function() {
 
     function createRealtimeForecastChart(data) {
         const currentHour = data.current_hour;
+        const currentDate = data.current_date;
+        const forecastStart = data.forecast_start;
+        const forecastEnd = data.forecast_end;
         const historicalActual = data.historical_actual || [];
         const historicalForecasted = data.historical_forecasted || [];
         const modelForecasts = data.model_forecasts || [];
         
         const traces = [];
         
-        // Add historical actual load trace (hour 0 to current_hour - 1)
+        // Helper function to create datetime string for x-axis
+        function createDatetimeStr(dateStr, hour) {
+            return `${dateStr} ${hour.toString().padStart(2, '0')}:00`;
+        }
+        
+        // Helper function to format datetime for display (e.g., "Jan 18 14:00")
+        function formatDatetimeShort(dateStr, hour) {
+            const date = new Date(dateStr + 'T00:00:00');
+            const monthDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return `${monthDay} ${hour.toString().padStart(2, '0')}:00`;
+        }
+        
+        // Add historical actual load trace (today's data up to current hour)
         if (historicalActual.length > 0) {
-            const hours = historicalActual.map(d => d.hour);
+            const xValues = historicalActual.map(d => createDatetimeStr(currentDate, d.hour));
             const loads = historicalActual.map(d => d.load);
             traces.push({
-                x: hours,
+                x: xValues,
                 y: loads,
                 type: 'scatter',
                 mode: 'lines+markers',
@@ -371,16 +413,17 @@ $(document).ready(function() {
                 marker: {
                     size: 8,
                     color: 'rgb(0, 0, 0)'
-                }
+                },
+                hovertemplate: '%{x}<br>Load: %{y:.2f} MW<extra></extra>'
             });
         }
         
-        // Add historical forecasted load trace (hour 0 to current_hour - 1)
+        // Add historical forecasted load trace (today's data up to current hour)
         if (historicalForecasted.length > 0) {
-            const hours = historicalForecasted.map(d => d.hour);
+            const xValues = historicalForecasted.map(d => createDatetimeStr(currentDate, d.hour));
             const loads = historicalForecasted.map(d => d.load);
             traces.push({
-                x: hours,
+                x: xValues,
                 y: loads,
                 type: 'scatter',
                 mode: 'lines+markers',
@@ -393,11 +436,12 @@ $(document).ready(function() {
                 marker: {
                     size: 6,
                     color: 'rgb(128, 128, 128)'
-                }
+                },
+                hovertemplate: '%{x}<br>Forecast: %{y:.2f} MW<extra></extra>'
             });
         }
         
-        // Add traces for each model's forecast (current_hour to 23)
+        // Add traces for each model's 24-hour forecast
         const colors = [
             'rgb(31, 119, 180)', // blue
             'rgb(255, 127, 14)', // orange
@@ -412,12 +456,12 @@ $(document).ready(function() {
         ];
         
         modelForecasts.forEach((modelData, idx) => {
-            const hours = modelData.forecasts?.map(f => f.hour) || [];
+            const xValues = modelData.forecasts?.map(f => createDatetimeStr(f.date, f.hour)) || [];
             const forecastValues = modelData.forecasts?.map(f => f.forecast) || [];
             const color = colors[idx % colors.length];
             
             traces.push({
-                x: hours,
+                x: xValues,
                 y: forecastValues,
                 type: 'scatter',
                 mode: 'lines+markers',
@@ -428,56 +472,45 @@ $(document).ready(function() {
                 },
                 marker: {
                     size: 6
-                }
+                },
+                hovertemplate: '%{x}<br>Forecast: %{y:.2f} MW<extra></extra>'
             });
         });
         
-        // Add vertical line at current hour
-        const shapes = [{
-            type: 'line',
-            x0: currentHour,
-            x1: currentHour,
-            y0: 0,
-            y1: 1,
-            yref: 'paper',
-            line: {
-                color: 'rgba(255, 0, 0, 0.5)',
-                width: 2,
-                dash: 'dot'
-            }
-        }];
+        // Create tick values and labels for x-axis (every 4 hours)
+        const forecastSlots = modelForecasts[0]?.forecasts || [];
+        const tickvals = [];
+        const ticktext = [];
         
-        // Add annotation for current hour
-        const annotations = [{
-            x: currentHour,
-            y: 1,
-            yref: 'paper',
-            text: `Current Hour: ${currentHour}`,
-            showarrow: true,
-            arrowhead: 2,
-            ax: 0,
-            ay: -40,
-            bgcolor: 'rgba(255, 255, 255, 0.9)',
-            bordercolor: 'rgba(255, 0, 0, 0.5)',
-            borderwidth: 1
-        }];
+        forecastSlots.forEach((slot, index) => {
+            // Show tick every 4 hours or at day boundaries (hour 0)
+            if (index % 4 === 0 || slot.hour === 0) {
+                tickvals.push(createDatetimeStr(slot.date, slot.hour));
+                ticktext.push(formatDatetimeShort(slot.date, slot.hour));
+            }
+        });
+        
+        // Format title with forecast range
+        const startLabel = formatDatetimeShort(forecastStart.date, forecastStart.hour);
+        const endLabel = formatDatetimeShort(forecastEnd.date, forecastEnd.hour);
         
         const layout = {
             autosize: true,
             title: {
-                text: 'Real-Time Load Forecast',
+                text: `24-Hour Load Forecast<br><sub>${startLabel} → ${endLabel}</sub>`,
                 font: {
                     size: 18,
                     family: 'Arial, sans-serif'
                 }
             },
             xaxis: {
-                title: 'Hour of Day',
-                tickmode: 'linear',
-                tick0: 0,
-                dtick: 2,
+                title: 'Date & Time',
+                tickmode: 'array',
+                tickvals: tickvals,
+                ticktext: ticktext,
+                tickangle: -45,
                 gridcolor: 'rgba(0, 0, 0, 0.1)',
-                range: [-0.5, 23.5]
+                type: 'category'
             },
             yaxis: {
                 title: 'Load (MW)',
@@ -487,7 +520,7 @@ $(document).ready(function() {
             legend: {
                 orientation: 'h',
                 x: 0.5,
-                y: -0.2,
+                y: -0.3,
                 xanchor: 'center',
                 yanchor: 'top',
                 bgcolor: 'rgba(255, 255, 255, 0.9)',
@@ -499,15 +532,13 @@ $(document).ready(function() {
             margin: {
                 l: 60,
                 r: 40,
-                t: 60,
-                b: 100
+                t: 80,
+                b: 120
             },
             font: {
                 family: 'Arial, sans-serif',
                 size: 12
-            },
-            shapes: shapes,
-            annotations: annotations
+            }
         };
         
         const config = {
@@ -541,6 +572,9 @@ $(document).ready(function() {
         }).format(now);
     }
 
+    // Store forecast data for download filename
+    let lastForecastData = null;
+
     // Download the currently visible real-time forecast table as an Excel file
     $('#downloadRealtimeForecastBtn').on('click', function() {
         const $resultsCard = $('#realtimeResultsCard');
@@ -552,8 +586,19 @@ $(document).ready(function() {
         }
 
         const tableElement = $table.get(0);
-        const selectedDate = $('#date').val() || getDhakaCurrentDate();
-        const filename = `Realtime_Forecast_${selectedDate}.xls`;
+        
+        // Generate filename with date range if forecast data is available
+        let filename;
+        if (lastForecastData && lastForecastData.forecast_start && lastForecastData.forecast_end) {
+            const startDate = lastForecastData.forecast_start.date;
+            const startHour = lastForecastData.forecast_start.hour;
+            const endDate = lastForecastData.forecast_end.date;
+            const endHour = lastForecastData.forecast_end.hour;
+            filename = `24h_Forecast_${startDate}_${startHour}h_to_${endDate}_${endHour}h.xls`;
+        } else {
+            const selectedDate = $('#date').val() || getDhakaCurrentDate();
+            filename = `24h_Forecast_${selectedDate}.xls`;
+        }
 
         downloadTableAsExcel(tableElement, filename);
     });

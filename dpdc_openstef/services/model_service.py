@@ -7,7 +7,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from openstef.data_classes.prediction_job import PredictionJobDataClass
 from openstef.pipeline.train_model import train_model_pipeline
 from openstef.pipeline.create_forecast import create_forecast_pipeline
@@ -425,15 +425,15 @@ class ModelService:
         nation_event: int = 0
     ) -> Dict[str, Any]:
         """
-        Generate real-time forecasts from current Dhaka hour to end of day (hour 23)
+        Generate real-time forecasts for the next 24 hours starting from current_hour + 1.
         
         This method:
         1. Determines current hour in Dhaka timezone
         2. Validates that the selected date is TODAY's date in Dhaka timezone
-        3. Extracts historical actual load (hour 0 to current_hour - 1) from CSV
-        4. Extracts historical forecasted load (hour 0 to current_hour - 1) from CSV
+        3. Extracts historical actual load (hour 0 to current_hour) from CSV
+        4. Extracts historical forecasted load (hour 0 to current_hour) from CSV
         5. Creates missing future timestamps with weather data from Meteostat
-        6. Generates forecasts for remaining hours (current_hour to 23) using selected models
+        6. Generates forecasts for next 24 hours (current_hour+1 to current_hour next day)
         
         Note: CSV data is stored in Dhaka timezone (+06:00), while openstef returns
         forecasts in UTC (+00:00). This method handles the timezone conversions.
@@ -449,12 +449,15 @@ class ModelService:
             Dict with structure:
             {
                 "current_hour": int,
+                "current_date": str,
+                "forecast_start": {"date": str, "hour": int},
+                "forecast_end": {"date": str, "hour": int},
                 "historical_actual": [{"hour": int, "load": float}],
                 "historical_forecasted": [{"hour": int, "load": float}],
                 "model_forecasts": [
                     {
                         "custom_name": str,
-                        "forecasts": [{"hour": int, "forecast": float}]
+                        "forecasts": [{"date": str, "hour": int, "forecast": float}]
                     }
                 ]
             }
@@ -480,9 +483,6 @@ class ModelService:
                 f"Selected date: {date}, Current Dhaka date: {current_dhaka_date}. "
                 f"Please select today's date or use the 'Backtest Models' feature for historical dates."
             )
-        
-        if current_hour == 23:
-            logger.warning("Current hour is 23. Only one hour remaining to forecast.")
         
         if not custom_names:
             raise ValueError("At least one model must be selected for forecasting.")
@@ -510,74 +510,47 @@ class ModelService:
                         result.append({"hour": hour, "load": float(value)})
             return result
         
-        # Extract historical data (hour 0 to current_hour - 1)
-        historical_actual = extract_hourly_data(range(current_hour), 'load')
-        historical_forecasted = extract_hourly_data(range(current_hour), 'forecasted_load') if 'forecasted_load' in input_data.columns else []
+        # Extract historical data (hour 0 to current_hour)
+        historical_actual = extract_hourly_data(range(current_hour + 1), 'load')
+        historical_forecasted = extract_hourly_data(range(current_hour + 1), 'forecasted_load') if 'forecasted_load' in input_data.columns else []
         
         logger.info(f"Extracted {len(historical_actual)} historical actual, {len(historical_forecasted)} historical forecasted values")
         
-        # Define forecast period in Dhaka timezone
-        forecast_start = create_dhaka_timestamp(date, current_hour)
-        forecast_end = create_dhaka_timestamp(date, 23)
+        # Calculate forecast start hour (current_hour + 1)
+        # If current_hour is 23, start from hour 0 of next day
+        if current_hour == 23:
+            forecast_start_hour = 0
+            next_date = (datetime.strptime(date, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+            forecast_start_date = next_date
+            logger.info(f"Current hour is 23. Starting forecast from hour 0 of {next_date}")
+        else:
+            forecast_start_hour = current_hour + 1
+            forecast_start_date = date
         
-        # Filter existing data for forecast period
-        test_data = input_data[(input_data.index >= forecast_start) & (input_data.index <= forecast_end)]
+        # Get 24 forecast slots using the new helper method
+        forecast_slots = create_24h_forecast_period(forecast_start_date, forecast_start_hour)
         
-        # Find and create missing hours
-        expected_hours = set(range(current_hour, 24))
-        existing_hours = {ts.hour for ts in test_data.index}
-        missing_hours = sorted(expected_hours - existing_hours)
+        logger.info(f"Forecasting 24 hours: {forecast_slots[0]} to {forecast_slots[-1]}")
         
-        if missing_hours:
-            logger.info(f"Creating {len(missing_hours)} missing hours: {missing_hours}")
-            
-            # Fetch weather data
-            try:
-                weather_data = get_weather_for_date(datetime.strptime(date, '%Y-%m-%d'))
-            except Exception as e:
-                logger.error(f"Error fetching weather data: {e}")
-                weather_data = [{'temp': 0.0, 'dwpt': 0.0, 'rhum': 0.0, 'prcp': 0.0, 
-                               'wdir': 0.0, 'wspd': 0.0, 'pres': 0.0, 'coco': 0}] * 24
-            
-            # Create new rows for missing hours
-            new_rows = []
-            for hour in missing_hours:
-                weather = weather_data[hour] if hour < len(weather_data) else weather_data[0]
-                new_rows.append(pd.DataFrame([{
-                    'load': np.nan,
-                    'is_holiday': holiday,
-                    'holiday_type': holiday_type,
-                    'national_event_type': nation_event,
-                    'temp': weather.get('temp', 0.0),
-                    'dwpt': weather.get('dwpt', 0.0),
-                    'rhum': weather.get('rhum', 0.0),
-                    'prcp': weather.get('prcp', 0.0),
-                    'wdir': weather.get('wdir', 0.0),
-                    'wspd': weather.get('wspd', 0.0),
-                    'pres': weather.get('pres', 0.0),
-                    'coco': weather.get('coco', 0),
-                    'forecasted_load': np.nan
-                }], index=[create_dhaka_timestamp(date, hour)]))
-            
-            input_data = pd.concat([input_data] + new_rows).sort_index()
-            test_data = input_data[(input_data.index >= forecast_start) & (input_data.index <= forecast_end)]
-            logger.info(f"Added {len(new_rows)} new rows, test_data now has {len(test_data)} hours")
+        # Prepare forecast data using the new helper method
+        to_forecast_data, _ = prepare_forecast_data_24h(
+            input_data,
+            forecast_start_date,
+            forecast_start_hour,
+            holiday,
+            holiday_type,
+            nation_event
+        )
         
-        if len(test_data) > 0:
-            logger.info(f"Forecast period: {test_data.index[0]} to {test_data.index[-1]}")
+        # Create list of forecast timestamps for lookup
+        forecast_timestamps = [create_dhaka_timestamp(slot["date"], slot["hour"]) for slot in forecast_slots]
         
-        # Prepare forecast data - set load to NaN for forecast period and trim
-        to_forecast_data = input_data.copy(deep=True)
-        to_forecast_data.loc[test_data.index, 'load'] = np.nan
-        if len(test_data) > 0:
-            to_forecast_data = to_forecast_data[to_forecast_data.index <= test_data.index[-1]]
-        to_forecast_data = to_forecast_data[~to_forecast_data.index.duplicated(keep='first')]
-        to_forecast_data = to_forecast_data[to_forecast_data.index.notna()]
+        logger.info(f"Forecast period: {forecast_timestamps[0]} to {forecast_timestamps[-1]}")
         
         # Generate forecasts for each model
         model_forecasts = []
         for custom_name in custom_names:
-            logger.info(f"Generating real-time forecast for model: {custom_name}")
+            logger.info(f"Generating 24-hour forecast for model: {custom_name}")
             
             try:
                 # Get forecast (openstef returns results in UTC timezone)
@@ -585,47 +558,201 @@ class ModelService:
                 
                 # Extract forecast values - convert Dhaka timestamps to UTC for lookup
                 forecasts = []
-                for dhaka_ts in test_data.index:
-                    hour = dhaka_ts.hour
+                for i, dhaka_ts in enumerate(forecast_timestamps):
+                    slot = forecast_slots[i]
                     # Convert Dhaka timestamp to UTC for forecast_df lookup
                     utc_ts = dhaka_ts.astimezone(utc_tz)
                     
                     if utc_ts in forecast_df.index and 'forecast' in forecast_df.columns:
                         forecast_value = forecast_df.loc[utc_ts, 'forecast']
                         forecasts.append({
-                            "hour": hour,
+                            "date": slot["date"],
+                            "hour": slot["hour"],
                             "forecast": float(forecast_value) if pd.notna(forecast_value) else None
                         })
                     else:
-                        logger.warning(f"Forecast for hour {hour} (UTC: {utc_ts}) not found for {custom_name}")
-                        forecasts.append({"hour": hour, "forecast": None})
+                        logger.warning(f"Forecast for {slot['date']} hour {slot['hour']} (UTC: {utc_ts}) not found for {custom_name}")
+                        forecasts.append({
+                            "date": slot["date"],
+                            "hour": slot["hour"],
+                            "forecast": None
+                        })
                 
                 model_forecasts.append({"custom_name": custom_name, "forecasts": forecasts})
-                logger.info(f"Completed real-time forecast for model: {custom_name}")
+                logger.info(f"Completed 24-hour forecast for model: {custom_name}")
                 
             except FileNotFoundError:
                 logger.error(f"Model files not found for: {custom_name}")
                 model_forecasts.append({
                     "custom_name": custom_name,
-                    "forecasts": [{"hour": ts.hour, "forecast": None} for ts in test_data.index],
+                    "forecasts": [{"date": slot["date"], "hour": slot["hour"], "forecast": None} for slot in forecast_slots],
                     "error": "Model not found"
                 })
             except Exception as e:
                 logger.error(f"Error generating forecast for {custom_name}: {str(e)}")
                 model_forecasts.append({
                     "custom_name": custom_name,
-                    "forecasts": [{"hour": ts.hour, "forecast": None} for ts in test_data.index],
+                    "forecasts": [{"date": slot["date"], "hour": slot["hour"], "forecast": None} for slot in forecast_slots],
                     "error": str(e)
                 })
         
-        logger.info(f"Completed real-time forecasts for all {len(custom_names)} models")
+        logger.info(f"Completed 24-hour forecasts for all {len(custom_names)} models")
         
         return {
             "current_hour": current_hour,
+            "current_date": current_dhaka_date,
+            "forecast_start": forecast_slots[0],
+            "forecast_end": forecast_slots[-1],
             "historical_actual": historical_actual,
             "historical_forecasted": historical_forecasted,
             "model_forecasts": model_forecasts
         }
+
+def create_24h_forecast_period(current_date: str, start_hour: int) -> List[Dict[str, Any]]:
+    """
+    Create list of 24 forecast time slots starting from start_hour.
+    Spans two days if start_hour > 0.
+    
+    Args:
+        current_date: Current date in 'YYYY-MM-DD' format
+        start_hour: Starting hour for forecast (0-23)
+        
+    Returns:
+        List of 24 dicts with 'date' and 'hour' keys
+        
+    Example: 
+        start_hour=14 on 2025-01-18
+        Returns: [{"date": "2025-01-18", "hour": 14}, ..., {"date": "2025-01-18", "hour": 23},
+                  {"date": "2025-01-19", "hour": 0}, ..., {"date": "2025-01-19", "hour": 13}]
+    """
+    from datetime import datetime, timedelta
+    
+    current_date_obj = datetime.strptime(current_date, '%Y-%m-%d')
+    next_date_obj = current_date_obj + timedelta(days=1)
+    next_date = next_date_obj.strftime('%Y-%m-%d')
+    
+    forecast_slots = []
+    
+    # Hours from start_hour to 23 (today)
+    for hour in range(start_hour, 24):
+        forecast_slots.append({"date": current_date, "hour": hour})
+    
+    # Hours from 0 to start_hour - 1 (tomorrow) to complete 24 hours
+    remaining_hours = 24 - len(forecast_slots)
+    for hour in range(remaining_hours):
+        forecast_slots.append({"date": next_date, "hour": hour})
+    
+    return forecast_slots
+
+
+def prepare_forecast_data_24h(
+    input_data: pd.DataFrame,
+    current_date: str,
+    start_hour: int,
+    holiday: int,
+    holiday_type: int,
+    nation_event: int
+) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
+    """
+    Prepare dataframe for 24-hour forecast spanning two days.
+    Creates missing timestamps with weather data for both days.
+    
+    Args:
+        input_data: Original input DataFrame with datetime index
+        current_date: Current date in 'YYYY-MM-DD' format
+        start_hour: Starting hour for forecast (0-23)
+        holiday: Holiday indicator (0 or 1)
+        holiday_type: Type of holiday
+        nation_event: National event indicator
+        
+    Returns:
+        Tuple of (prepared DataFrame with NaN for forecast hours, list of forecast slots)
+    """
+    from datetime import datetime, timedelta
+    
+    dhaka_tz = timezone(timedelta(hours=6))
+    
+    # Get the 24 forecast slots
+    forecast_slots = create_24h_forecast_period(current_date, start_hour)
+    
+    # Helper to create Dhaka timezone timestamp
+    def create_dhaka_ts(date_str: str, hour: int) -> datetime:
+        return datetime.strptime(date_str, '%Y-%m-%d').replace(
+            hour=hour, minute=0, second=0, microsecond=0, tzinfo=dhaka_tz
+        )
+    
+    # Get unique dates in the forecast period
+    forecast_dates = list(set(slot["date"] for slot in forecast_slots))
+    forecast_dates.sort()
+    
+    # Collect all forecast timestamps
+    forecast_timestamps = [create_dhaka_ts(slot["date"], slot["hour"]) for slot in forecast_slots]
+    
+    # Find missing timestamps
+    existing_timestamps = set(input_data.index)
+    missing_timestamps = [ts for ts in forecast_timestamps if ts not in existing_timestamps]
+    
+    if missing_timestamps:
+        logger.info(f"Creating {len(missing_timestamps)} missing timestamps for 24h forecast")
+        
+        # Fetch weather data for each unique date
+        weather_data_by_date = {}
+        for date_str in forecast_dates:
+            try:
+                weather_data_by_date[date_str] = get_weather_for_date(
+                    datetime.strptime(date_str, '%Y-%m-%d')
+                )
+            except Exception as e:
+                logger.error(f"Error fetching weather data for {date_str}: {e}")
+                # Default weather data
+                weather_data_by_date[date_str] = [
+                    {'temp': 0.0, 'dwpt': 0.0, 'rhum': 0.0, 'prcp': 0.0,
+                     'wdir': 0.0, 'wspd': 0.0, 'pres': 0.0, 'coco': 0}
+                ] * 24
+        
+        # Create new rows for missing timestamps
+        new_rows = []
+        for ts in missing_timestamps:
+            date_str = ts.strftime('%Y-%m-%d')
+            hour = ts.hour
+            weather_list = weather_data_by_date.get(date_str, weather_data_by_date[forecast_dates[0]])
+            weather = weather_list[hour] if hour < len(weather_list) else weather_list[0]
+            
+            new_rows.append(pd.DataFrame([{
+                'load': np.nan,
+                'is_holiday': holiday,
+                'holiday_type': holiday_type,
+                'national_event_type': nation_event,
+                'temp': weather.get('temp', 0.0),
+                'dwpt': weather.get('dwpt', 0.0),
+                'rhum': weather.get('rhum', 0.0),
+                'prcp': weather.get('prcp', 0.0),
+                'wdir': weather.get('wdir', 0.0),
+                'wspd': weather.get('wspd', 0.0),
+                'pres': weather.get('pres', 0.0),
+                'coco': weather.get('coco', 0),
+                'forecasted_load': np.nan
+            }], index=[ts]))
+        
+        input_data = pd.concat([input_data] + new_rows).sort_index()
+        logger.info(f"Added {len(new_rows)} new rows for 24h forecast")
+    
+    # Prepare forecast data - set load to NaN for all forecast timestamps
+    to_forecast_data = input_data.copy(deep=True)
+    for ts in forecast_timestamps:
+        if ts in to_forecast_data.index:
+            to_forecast_data.loc[ts, 'load'] = np.nan
+    
+    # Trim data to end at last forecast timestamp
+    last_forecast_ts = max(forecast_timestamps)
+    to_forecast_data = to_forecast_data[to_forecast_data.index <= last_forecast_ts]
+    
+    # Clean up
+    to_forecast_data = to_forecast_data[~to_forecast_data.index.duplicated(keep='first')]
+    to_forecast_data = to_forecast_data[to_forecast_data.index.notna()]
+    
+    return to_forecast_data, forecast_slots
+
 
 def _forecast_24_hours(custom_name: str, to_forecast_data: pd.DataFrame) -> pd.DataFrame:
     """
