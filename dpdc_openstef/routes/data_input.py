@@ -5,13 +5,17 @@ from fastapi.templating import Jinja2Templates
 import json
 import logging
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 from services.weather_service import get_weather_for_date
 from services.dropdown_service import _load_holiday_type_options, _load_national_event_options
 
 logger = logging.getLogger(__name__)
+
+# Bangladesh timezone (UTC+6)
+TIMEZONE_OFFSET = timezone(timedelta(hours=6))
+TIMEZONE_SUFFIX = "+06:00"
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -65,17 +69,22 @@ async def get_data_input(date: str):
         
         # Create data for all 24 hours
         for hour in range(24):
-            # Create timestamp for this hour
-            timestamp = selected_date + timedelta(hours=hour)
-            timestamp_str = timestamp.strftime('%Y-%m-%d %H:%M:%S+00:00')
-            
             # Find data for this specific hour
             hour_data = date_data[date_data['date_time'].dt.hour == hour]
             
             if not hour_data.empty:
+                # Use the actual timestamp from the CSV data
+                actual_timestamp = hour_data.iloc[0]['date_time']
+                timestamp_str = actual_timestamp.strftime('%Y-%m-%d %H:%M:%S%z')
+                # Format timezone offset with colon (e.g., +0600 -> +06:00)
+                if len(timestamp_str) > 5 and timestamp_str[-5] in ['+', '-'] and ':' not in timestamp_str[-5:]:
+                    timestamp_str = timestamp_str[:-2] + ':' + timestamp_str[-2:]
                 load = float(hour_data.iloc[0]['load']) if pd.notna(hour_data.iloc[0]['load']) else 0
                 forecasted_load = float(hour_data.iloc[0]['forecasted_load']) if pd.notna(hour_data.iloc[0]['forecasted_load']) else 0
             else:
+                # Generate timestamp with +06:00 timezone for missing hours
+                timestamp = selected_date + timedelta(hours=hour)
+                timestamp_str = timestamp.strftime(f'%Y-%m-%d %H:%M:%S{TIMEZONE_SUFFIX}')
                 load = 0
                 forecasted_load = 0
             
@@ -99,7 +108,7 @@ async def get_data_input(date: str):
         selected_date = pd.to_datetime(date)
         for hour in range(24):
             timestamp = selected_date + timedelta(hours=hour)
-            timestamp_str = timestamp.strftime('%Y-%m-%d %H:%M:%S+00:00')
+            timestamp_str = timestamp.strftime(f'%Y-%m-%d %H:%M:%S{TIMEZONE_SUFFIX}')
             hourly_data.append({
                 "timestamp": timestamp_str,
                 "load": 0,
