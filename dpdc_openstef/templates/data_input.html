@@ -211,11 +211,10 @@ $(document).ready(function() {
     function displayDataTable(data) {
         let tableHtml = '';
         
-        // Data is already sorted by timestamp, so we just iterate through it
+        // Data is already sorted by timestamp (hours 0-23), so we use the index as the hour
         for (let i = 0; i < data.length; i++) {
             const hourData = data[i];
-            const timestamp = new Date(hourData.timestamp);
-            const hour = timestamp.getUTCHours();
+            const hour = i;  // Backend returns hours 0-23 in order
             
             tableHtml += `
                 <tr data-timestamp="${hourData.timestamp}">
