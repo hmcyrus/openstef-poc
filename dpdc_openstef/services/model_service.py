@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from openstef.data_classes.prediction_job import PredictionJobDataClass
 from openstef.pipeline.train_model import train_model_pipeline
 from openstef.pipeline.create_forecast import create_forecast_pipeline
-from utils.dateutils import create_utc_datetime
+from utils.dateutils import create_utc_datetime, create_dhaka_datetime, DHAKA_TZ
 from datetime import datetime, timedelta, timezone
 from services.weather_service import get_weather_for_date
 
@@ -316,6 +316,9 @@ class ModelService:
         """
         Create forecasts from multiple trained models for 24 hours (0-23)
         
+        Note: CSV data is stored in Dhaka timezone (+06:00). This method uses Dhaka
+        timestamps for CSV lookups and converts to UTC for openstef forecast lookups.
+        
         Args:
             custom_names: List of trained model names
             date: Date string in format 'YYYY-MM-DD'
@@ -324,10 +327,12 @@ class ModelService:
             Dict with 'all_forecasts' key containing list of model forecasts
         """
         # Load input data and prepare dataframe with NaN for 24 hours
+        # CSV timestamps are in Dhaka timezone (+06:00)
         input_data = pd.read_csv(TRAINING_DATA_PATH, index_col=0, parse_dates=True)
         
-        # Calculate the start of the 24-hour forecast period (hour 0 of the given date)
-        forecast_start_datetime = create_utc_datetime(date, 0)
+        # Calculate the start of the 24-hour forecast period using Dhaka timezone
+        # (hour 0 of the given date in Dhaka time)
+        forecast_start_datetime = create_dhaka_datetime(date, 0)
         
         # Get the index of the hour before the forecast period starts (robust to missing timestamps)
         traing_data_last_index = get_training_data_last_index(input_data, date)
@@ -351,19 +356,21 @@ class ModelService:
         all_forecasts = []
         
         # Extract actual load data for the 24 hours (if available)
+        # Use Dhaka timestamps for CSV lookups since data is in +06:00
         actual_loads = []
         for hour in range(24):
-            forecast_timestamp = create_utc_datetime(date, hour)
+            # Use Dhaka timestamp for CSV index lookup
+            dhaka_timestamp = create_dhaka_datetime(date, hour)
             # Check if this timestamp exists in the input data
-            if forecast_timestamp in input_data.index:
-                actual_load = input_data.loc[forecast_timestamp, 'load']
+            if dhaka_timestamp in input_data.index:
+                actual_load = input_data.loc[dhaka_timestamp, 'load']
                 actual_loads.append({
-                    "timestamp": create_utc_datetime(date, hour, timezone(timedelta(hours=6))).isoformat(),
+                    "timestamp": dhaka_timestamp.isoformat(),
                     "load": float(actual_load) if pd.notna(actual_load) else None
                 })
             else:
                 actual_loads.append({
-                    "timestamp": create_utc_datetime(date, hour, timezone(timedelta(hours=6))).isoformat(),
+                    "timestamp": dhaka_timestamp.isoformat(),
                     "load": None
                 })
         
@@ -377,27 +384,30 @@ class ModelService:
             # Format the forecasts for all 24 hours
             model_forecasts = []
             for hour in range(24):
-                forecast_timestamp = create_utc_datetime(date, hour)
+                # Use Dhaka timestamp for display and convert to UTC for forecast_df lookup
+                dhaka_timestamp = create_dhaka_datetime(date, hour)
+                # openstef returns forecasts in UTC, so convert Dhaka to UTC for lookup
+                utc_timestamp = dhaka_timestamp.astimezone(timezone.utc)
                 
                 # Safely access forecast value with error handling
                 try:
-                    if forecast_timestamp in forecast_df.index and 'forecast' in forecast_df.columns:
-                        forecast_value = forecast_df.loc[forecast_timestamp, 'forecast']
+                    if utc_timestamp in forecast_df.index and 'forecast' in forecast_df.columns:
+                        forecast_value = forecast_df.loc[utc_timestamp, 'forecast']
                         # Check if the value is valid (not NaN)
                         if pd.notna(forecast_value):
                             forecast_value = float(forecast_value)
                         else:
                             forecast_value = None
-                            logger.warning(f"Forecast value is NaN for {custom_name} at {forecast_timestamp}")
+                            logger.warning(f"Forecast value is NaN for {custom_name} at {utc_timestamp}")
                     else:
                         forecast_value = None
-                        logger.warning(f"Forecast timestamp {forecast_timestamp} not found in forecast_df for {custom_name}")
+                        logger.warning(f"Forecast timestamp {utc_timestamp} not found in forecast_df for {custom_name}")
                 except Exception as e:
                     forecast_value = None
-                    logger.error(f"Error accessing forecast value for {custom_name} at {forecast_timestamp}: {e}")
+                    logger.error(f"Error accessing forecast value for {custom_name} at {utc_timestamp}: {e}")
                 
                 forecast_result = {
-                    "timestamp": create_utc_datetime(date, hour, timezone(timedelta(hours=6))).isoformat(),
+                    "timestamp": dhaka_timestamp.isoformat(),
                     "forecast": forecast_value
                 }
                 model_forecasts.append(forecast_result)
@@ -785,7 +795,18 @@ def _forecast_24_hours(custom_name: str, to_forecast_data: pd.DataFrame) -> pd.D
     return forecast
 
 def calculate_previous_hr_of_forecast(date: str, hour: int) -> datetime:
-    # Create UTC datetime from date and hour parameters
+    """
+    Calculate the timestamp of the hour immediately before the forecast period.
+    
+    Note: Uses Dhaka timezone since CSV data is stored in +06:00 format.
+    
+    Args:
+        date: Forecast date in 'YYYY-MM-DD' format
+        hour: Hour value (0-23)
+        
+    Returns:
+        datetime: Dhaka timezone-aware datetime for the previous hour
+    """
     # Handle hour adjustment logic: if hour > 0, subtract 1; if hour == 0, go to previous date at hour 23
     if hour > 0:
         adjusted_hour = hour - 1
@@ -797,7 +818,8 @@ def calculate_previous_hr_of_forecast(date: str, hour: int) -> datetime:
         adjusted_date = previous_date.strftime('%Y-%m-%d')
         adjusted_hour = 23
     
-    return create_utc_datetime(adjusted_date, adjusted_hour)
+    # Use Dhaka timezone for CSV data lookups
+    return create_dhaka_datetime(adjusted_date, adjusted_hour)
 
 
 def get_training_data_last_index(input_data: pd.DataFrame, date: str) -> int:
@@ -806,8 +828,11 @@ def get_training_data_last_index(input_data: pd.DataFrame, date: str) -> int:
     
     Uses searchsorted to handle cases where the exact timestamp doesn't exist in the data.
     
+    Note: Uses Dhaka timezone (+06:00) for CSV index lookups since master data
+    is stored in Dhaka timezone.
+    
     Args:
-        input_data: DataFrame with datetime index containing training data
+        input_data: DataFrame with datetime index containing training data (Dhaka timezone)
         date: Forecast date in 'YYYY-MM-DD' format
         
     Returns:
@@ -816,6 +841,7 @@ def get_training_data_last_index(input_data: pd.DataFrame, date: str) -> int:
     Raises:
         ValueError: If forecast date is before available training data
     """
+    # Returns Dhaka timezone timestamp for CSV lookup
     previous_hour = calculate_previous_hr_of_forecast(date, 0)
     
     # Check if the exact timestamp exists
@@ -858,6 +884,9 @@ def get_test_data_for_date(input_data: pd.DataFrame, date: str) -> pd.DataFrame:
     Instead of assuming 24 consecutive hours exist, this filters by date range to get
     only the timestamps that actually exist in the data.
     
+    Note: CSV data is stored in Dhaka timezone (+06:00), so we use Dhaka timestamps
+    for filtering to ensure correct hour alignment.
+    
     Args:
         input_data: DataFrame with datetime index containing all data
         date: Forecast date in 'YYYY-MM-DD' format
@@ -865,9 +894,9 @@ def get_test_data_for_date(input_data: pd.DataFrame, date: str) -> pd.DataFrame:
     Returns:
         DataFrame containing only the available timestamps for the forecast date
     """
-    # Define the 24-hour forecast period
-    forecast_start = create_utc_datetime(date, 0)
-    forecast_end = create_utc_datetime(date, 23)
+    # Define the 24-hour forecast period using Dhaka timezone (CSV uses +06:00)
+    forecast_start = create_dhaka_datetime(date, 0)
+    forecast_end = create_dhaka_datetime(date, 23)
     
     # Filter to get only timestamps within the forecast period that exist in the data
     test_data = input_data[(input_data.index >= forecast_start) & (input_data.index <= forecast_end)]
