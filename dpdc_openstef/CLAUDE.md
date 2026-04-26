@@ -7,14 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All commands must be run from inside `dpdc_openstef/`.
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (Poetry)
+poetry install
 
 # Start the server (hot-reload)
-uvicorn main:app --reload --host 127.0.0.1 --port 8080
+poetry run uvicorn main:app --reload --host 127.0.0.1 --port 8080
 
 # Or simply
-python main.py
+poetry run python main.py
 ```
 
 Via Docker:
@@ -24,7 +24,7 @@ docker compose up --build
 
 Log level and file path are controlled by environment variables:
 ```bash
-LOG_LEVEL=DEBUG LOG_FILE=logs/app.log uvicorn main:app --reload --host 127.0.0.1 --port 8080
+LOG_LEVEL=DEBUG LOG_FILE=logs/app.log poetry run uvicorn main:app --reload --host 127.0.0.1 --port 8080
 ```
 
 Set `LOG_FILE=` (empty) to disable file logging.
