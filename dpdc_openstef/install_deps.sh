@@ -2,6 +2,9 @@
 # Install Python dependencies: try Poetry first, fall back to pip.
 set -e
 
+# Always run from within dpdc_openstef/ regardless of caller's working directory.
+cd "$(dirname "$0")"
+
 if ! command -v poetry >/dev/null 2>&1; then
     echo "[install_deps] Poetry not found. Attempting to install via pip..."
     pip install --quiet poetry || true
