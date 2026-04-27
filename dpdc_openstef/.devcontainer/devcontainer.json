@@ -2,7 +2,7 @@
     "name": "Python 3.11 Dev Container",
     "image": "mcr.microsoft.com/devcontainers/python:3.11",
   
-    "postCreateCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+    "postCreateCommand": "sh install_deps.sh",
   
     "customizations": {
       "vscode": {

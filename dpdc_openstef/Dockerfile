@@ -5,7 +5,10 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # Install Poetry deps into the system Python (no virtualenv in containers)
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_NO_INTERACTION=1
 
 # Set working directory
 WORKDIR /app
@@ -17,11 +20,13 @@ RUN apt-get update && \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Copy dependency files first for better layer caching
+COPY requirements.txt pyproject.toml install_deps.sh ./
+# Copy lock file only when it exists
+COPY poetry.loc[k] ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN sh install_deps.sh
 
 # Copy application code
 COPY . .

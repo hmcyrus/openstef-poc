@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "dpdc-openstef"
+version = "0.1.0"
+description = "FastAPI-based electrical load forecasting application using OpenSTEF"
+authors = []
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "0.104.1"
+uvicorn = {version = "0.24.0", extras = ["standard"]}
+jinja2 = "3.1.2"
+python-multipart = "0.0.6"
+openstef = "3.4.72"
+jupyter = "1.0"
+pandas = "*"
+xgboost = "*"
+openpyxl = "*"
+meteostat = "1.7.6"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
