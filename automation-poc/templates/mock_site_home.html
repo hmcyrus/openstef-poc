@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GridMon Portal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 14px; background: #f0f0f0; color: #222; }
+    #header { background: #003366; color: white; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+    #header h1 { font-size: 1.2rem; font-weight: bold; letter-spacing: 1px; }
+    #header span { font-size: .8rem; opacity: .7; }
+    #nav { background: #005599; padding: 0 24px; }
+    #nav a { display: inline-block; color: #cce0ff; padding: 10px 16px; text-decoration: none; font-size: 13px; }
+    #nav a:hover { background: #0077cc; color: white; }
+    #nav a.active { background: #0077cc; color: white; border-bottom: 3px solid #ffcc00; }
+    #main { padding: 24px; max-width: 960px; }
+    .portal-card { background: white; border: 1px solid #ccc; border-radius: 4px; padding: 20px; margin-bottom: 16px; }
+    .portal-card h2 { font-size: 1rem; color: #003366; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+    .portal-card p { color: #555; line-height: 1.5; }
+    .portal-card ul { padding-left: 20px; }
+    .portal-card ul li { margin: 6px 0; }
+    .portal-card ul li a { color: #0055aa; text-decoration: none; }
+    .portal-card ul li a:hover { text-decoration: underline; }
+    #footer { background: #003366; color: #aac4e0; font-size: 11px; padding: 10px 24px; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>&#9889; GRIDMON PORTAL</h1>
+    <span>Power Monitoring &amp; Reporting System v2.4.1</span>
+  </div>
+  <div id="nav">
+    <a href="/mock-site/" class="active">Home</a>
+    <a href="/mock-site/reports/load">Load Reports</a>
+  </div>
+  <div id="main">
+    <div class="portal-card">
+      <h2>Welcome to GridMon Portal</h2>
+      <p>This portal provides access to real-time and historical power grid monitoring data. Use the navigation above to access reports and data exports.</p>
+    </div>
+    <div class="portal-card">
+      <h2>Available Reports</h2>
+      <ul>
+        <li><a href="/mock-site/reports/load">Hourly Load Report</a> — View 24-hour load data by date</li>
+      </ul>
+    </div>
+    <div class="portal-card">
+      <h2>System Notice</h2>
+      <p>This is a demo/mock portal used for testing the automated data collection pipeline. Data is synthetically generated and does not represent real grid readings.</p>
+    </div>
+  </div>
+  <div id="footer">GridMon Portal &copy; 2024 — For internal use only</div>
+</body>
+</html>

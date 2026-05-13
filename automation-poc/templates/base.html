@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Automation POC{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <style>
+    body { background-color: #f5f7fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+    .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 2px 4px rgba(0,0,0,.1); }
+    .navbar-brand { font-weight: 600; font-size: 1.4rem; color: white !important; }
+    .nav-link { color: rgba(255,255,255,.85) !important; font-weight: 500; border-radius: .375rem; margin: 0 .2rem; }
+    .nav-link:hover, .nav-link.active { color: white !important; background: rgba(255,255,255,.15); }
+    .card { border: none; border-radius: .75rem; box-shadow: 0 .125rem .25rem rgba(0,0,0,.075); margin-bottom: 1.5rem; }
+    .card-header { background: white; border-bottom: 2px solid #f0f0f0; font-weight: 600; font-size: 1.1rem; padding: 1rem 1.5rem; }
+    .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; }
+    .btn-primary:hover { background: linear-gradient(135deg, #5568d3 0%, #65408b 100%); }
+    .table thead { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    .table thead th { border: none; font-weight: 600; padding: .75rem 1rem; }
+    .page-title { font-weight: 700; border-bottom: 3px solid #667eea; padding-bottom: .75rem; margin-bottom: 1.5rem; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .dot-green { background: #198754; }
+    .dot-red { background: #dc3545; }
+    .dot-grey { background: #adb5bd; }
+    .log-box { background: #1e1e2e; color: #cdd6f4; font-family: monospace; font-size: .85rem;
+               border-radius: .5rem; padding: 1rem; min-height: 120px; max-height: 300px; overflow-y: auto; }
+    .log-success { color: #a6e3a1; }
+    .log-error { color: #f38ba8; }
+    .log-info { color: #89b4fa; }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-robot"></i> Automation POC</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link {% if active_page == 'data_collection' %}active{% endif %}" href="/">
+            <i class="bi bi-download"></i> Data Collection
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/mock-site/" target="_blank">
+            <i class="bi bi-box-arrow-up-right"></i> Mock Target Site
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<div class="container py-4">
+  {% block content %}{% endblock %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
