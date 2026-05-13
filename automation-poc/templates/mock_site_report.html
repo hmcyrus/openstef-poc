@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hourly Load Report — GridMon Portal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 14px; background: #f0f0f0; color: #222; }
+    #header { background: #003366; color: white; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+    #header h1 { font-size: 1.2rem; font-weight: bold; letter-spacing: 1px; }
+    #nav { background: #005599; padding: 0 24px; }
+    #nav a { display: inline-block; color: #cce0ff; padding: 10px 16px; text-decoration: none; font-size: 13px; }
+    #nav a:hover { background: #0077cc; color: white; }
+    #nav a.active { background: #0077cc; color: white; border-bottom: 3px solid #ffcc00; }
+    #main { padding: 24px; max-width: 960px; }
+    .breadcrumb { font-size: 12px; color: #666; margin-bottom: 16px; }
+    .breadcrumb a { color: #0055aa; text-decoration: none; }
+    h2 { font-size: 1.1rem; color: #003366; margin-bottom: 16px; }
+    form { background: white; border: 1px solid #ccc; border-radius: 4px; padding: 16px; margin-bottom: 20px; display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+    form label { font-size: 13px; color: #333; display: flex; flex-direction: column; gap: 4px; }
+    form input[type="date"] { padding: 6px 10px; border: 1px solid #aaa; border-radius: 3px; font-size: 13px; }
+    form button { background: #005599; color: white; border: none; padding: 8px 20px; border-radius: 3px; font-size: 13px; cursor: pointer; }
+    form button:hover { background: #003366; }
+    .result-header { background: #003366; color: white; padding: 8px 12px; font-size: 13px; border-radius: 4px 4px 0 0; }
+    table#load-data { width: 100%; border-collapse: collapse; background: white; border: 1px solid #ccc; border-top: none; }
+    table#load-data th { background: #005599; color: white; padding: 8px 12px; text-align: left; font-size: 13px; }
+    table#load-data td { padding: 7px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+    table#load-data tr:nth-child(even) td { background: #f8f8f8; }
+    table#load-data tr:hover td { background: #e8f0ff; }
+    .total-row td { font-weight: bold; background: #eef2ff !important; border-top: 2px solid #005599; }
+    #footer { background: #003366; color: #aac4e0; font-size: 11px; padding: 10px 24px; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>&#9889; GRIDMON PORTAL</h1>
+    <span>Power Monitoring &amp; Reporting System v2.4.1</span>
+  </div>
+  <div id="nav">
+    <a href="/mock-site/">Home</a>
+    <a href="/mock-site/reports/load" class="active">Load Reports</a>
+  </div>
+  <div id="main">
+    <div class="breadcrumb"><a href="/mock-site/">Home</a> › <a href="/mock-site/reports/load">Load Reports</a> › Hourly Load Report</div>
+    <h2>Hourly Load Report</h2>
+
+    <form method="POST" action="/mock-site/reports/load">
+      <label>
+        Select Date
+        <input type="date" name="report_date" value="{{ report_date or '' }}" required>
+      </label>
+      <button type="submit">Generate Report</button>
+    </form>
+
+    {% if submitted and hourly_data %}
+    <div class="result-header">Showing results for: {{ report_date }}</div>
+    <table id="load-data">
+      <thead>
+        <tr>
+          <th>Hour</th>
+          <th>Time</th>
+          <th>Load (MW)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in hourly_data %}
+        <tr>
+          <td>{{ "%02d"|format(row.hour) }}</td>
+          <td>{{ "%02d:00"|format(row.hour) }}</td>
+          <td>{{ row.load }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td colspan="2">Daily Total</td>
+          <td>{{ hourly_data | sum(attribute='load') | round(1) }} MW·h</td>
+        </tr>
+      </tfoot>
+    </table>
+    {% elif submitted %}
+    <p style="color:#c00; margin-top:12px;">No data available for the selected date.</p>
+    {% endif %}
+  </div>
+  <div id="footer">GridMon Portal &copy; 2024 — For internal use only</div>
+</body>
+</html>

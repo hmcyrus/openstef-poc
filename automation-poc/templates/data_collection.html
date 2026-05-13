@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Data Collection — Automation POC{% endblock %}
+
+{% block content %}
+<h1 class="page-title"><i class="bi bi-download"></i> Data Collection</h1>
+
+<!-- Status Bar -->
+<div class="card">
+  <div class="card-body d-flex flex-wrap gap-4 align-items-center py-3">
+    <div>
+      <small class="text-muted d-block">Automation</small>
+      {% if job_active %}
+        <span class="status-dot dot-green me-1"></span><strong class="text-success">Active</strong>
+      {% else %}
+        <span class="status-dot dot-grey me-1"></span><strong class="text-secondary">Disabled</strong>
+      {% endif %}
+    </div>
+    <div>
+      <small class="text-muted d-block">Next Scheduled Run</small>
+      <strong>{{ next_run or "—" }}</strong>
+    </div>
+    <div>
+      <small class="text-muted d-block">Last Run</small>
+      {% if last_run %}
+        {% if last_run.status == "success" %}
+          <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ last_run.date }} — {{ last_run.records }} records</span>
+        {% else %}
+          <span class="text-danger"><i class="bi bi-x-circle-fill"></i> {{ last_run.date }} — {{ last_run.error }}</span>
+        {% endif %}
+      {% else %}
+        <span class="text-muted">No runs yet</span>
+      {% endif %}
+    </div>
+    <div class="ms-auto">
+      <a href="/mock-site/" target="_blank" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-box-arrow-up-right"></i> View Mock Target Site
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <!-- Config Card -->
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-gear"></i> Configuration</div>
+      <div class="card-body">
+        <form id="config-form">
+          <div class="mb-3">
+            <label class="form-label">Target URL</label>
+            <input type="url" class="form-control" name="target_url" value="{{ config.target_url }}" required>
+            <div class="form-text">Base URL of the site to scrape (for demo: http://localhost:8090)</div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label">Run Hour (0–23)</label>
+              <input type="number" class="form-control" name="run_hour" value="{{ config.run_hour }}" min="0" max="23" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Run Minute (0–59)</label>
+              <input type="number" class="form-control" name="run_minute" value="{{ config.run_minute }}" min="0" max="59" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="enabled" id="enableSwitch" {% if config.enabled %}checked{% endif %}>
+              <label class="form-check-label" for="enableSwitch">Enable daily automation</label>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-save"></i> Save Configuration
+          </button>
+        </form>
+        <div id="config-result" class="mt-2" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual Trigger Card -->
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-play-circle"></i> Manual Trigger</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Scrape the target site for each day in the selected range.
+          Uses the same service as the daily automation — useful for backfilling missing data.
+        </p>
+        <form id="trigger-form">
+          <div class="row g-2 mb-3">
+            <div class="col-sm-5">
+              <label class="form-label">Start Date</label>
+              <input type="text" class="form-control" id="start_date" name="start_date" placeholder="YYYY-MM-DD" required>
+            </div>
+            <div class="col-sm-5">
+              <label class="form-label">End Date</label>
+              <input type="text" class="form-control" id="end_date" name="end_date" placeholder="YYYY-MM-DD" required>
+            </div>
+            <div class="col-sm-2 d-flex align-items-end">
+              <button type="submit" class="btn btn-primary w-100" id="run-btn">
+                <i class="bi bi-play-fill"></i> Run
+              </button>
+            </div>
+          </div>
+          <div class="mb-2 d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setQuick('yesterday')">Yesterday</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setQuick('last7')">Last 7 days</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setQuick('last30')">Last 30 days</button>
+          </div>
+        </form>
+
+        <div id="run-log" class="log-box mt-3" style="display:none;"></div>
+
+        <div id="run-summary" class="mt-2" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Data Preview -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-table"></i> Collected Data Preview</span>
+    <a href="/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
+  </div>
+  <div class="card-body p-0">
+    {% if data_preview %}
+    <div style="overflow-x:auto; max-height: 400px; overflow-y:auto;">
+      <table class="table table-hover mb-0">
+        <thead style="position:sticky;top:0;">
+          <tr>
+            <th>Date</th>
+            <th>Hour</th>
+            <th>Timestamp</th>
+            <th>Load (MW)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in data_preview %}
+          <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ "%02d"|format(row.hour|int) }}:00</td>
+            <td>{{ row.timestamp }}</td>
+            <td>{{ row.load_mw }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox" style="font-size:2rem;"></i>
+      <p class="mt-2">No data collected yet. Use the Manual Trigger above to collect data.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Date pickers
+  flatpickr("#start_date", { dateFormat: "Y-m-d" });
+  flatpickr("#end_date",   { dateFormat: "Y-m-d" });
+
+  function fmtDate(d) {
+    return d.toISOString().split('T')[0];
+  }
+
+  function setQuick(preset) {
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    if (preset === 'yesterday') {
+      document.getElementById('start_date')._flatpickr.setDate(yesterday);
+      document.getElementById('end_date')._flatpickr.setDate(yesterday);
+    } else if (preset === 'last7') {
+      const d = new Date(today); d.setDate(today.getDate() - 7);
+      document.getElementById('start_date')._flatpickr.setDate(d);
+      document.getElementById('end_date')._flatpickr.setDate(yesterday);
+    } else if (preset === 'last30') {
+      const d = new Date(today); d.setDate(today.getDate() - 30);
+      document.getElementById('start_date')._flatpickr.setDate(d);
+      document.getElementById('end_date')._flatpickr.setDate(yesterday);
+    }
+  }
+
+  // Config form
+  document.getElementById('config-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const resultEl = document.getElementById('config-result');
+    try {
+      const resp = await fetch('/api/config', { method: 'POST', body: fd });
+      const data = await resp.json();
+      resultEl.innerHTML = `<div class="alert alert-${resp.ok ? 'success' : 'danger'} py-2">${data.message || data.detail}</div>`;
+      resultEl.style.display = 'block';
+      setTimeout(() => location.reload(), 1200);
+    } catch(err) {
+      resultEl.innerHTML = `<div class="alert alert-danger py-2">Request failed: ${err}</div>`;
+      resultEl.style.display = 'block';
+    }
+  });
+
+  // Manual trigger form
+  document.getElementById('trigger-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const logEl = document.getElementById('run-log');
+    const summaryEl = document.getElementById('run-summary');
+    const btn = document.getElementById('run-btn');
+
+    logEl.innerHTML = '<span class="log-info">⏳ Running collection...</span>';
+    logEl.style.display = 'block';
+    summaryEl.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Running...';
+
+    try {
+      const resp = await fetch('/api/collection/run', { method: 'POST', body: fd });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        logEl.innerHTML = `<span class="log-error">✗ ${data.message}</span>`;
+      } else {
+        const lines = data.results.map(r => {
+          if (r.status === 'success') {
+            return `<span class="log-success">✓ ${r.date} — ${r.records} records collected</span>`;
+          } else {
+            return `<span class="log-error">✗ ${r.date} — ${r.error}</span>`;
+          }
+        });
+        logEl.innerHTML = lines.join('\n');
+
+        summaryEl.innerHTML = `
+          <div class="alert alert-${data.error_count === 0 ? 'success' : 'warning'} py-2 mb-0">
+            Completed: <strong>${data.success_count}</strong> succeeded,
+            <strong>${data.error_count}</strong> failed,
+            <strong>${data.total}</strong> total.
+            ${data.error_count === 0 ? '<a href="/" class="alert-link ms-2">Refresh page to see data ↓</a>' : ''}
+          </div>`;
+        summaryEl.style.display = 'block';
+      }
+    } catch(err) {
+      logEl.innerHTML = `<span class="log-error">✗ Network error: ${err}</span>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-play-fill"></i> Run';
+    }
+  });
+</script>
+{% endblock %}
